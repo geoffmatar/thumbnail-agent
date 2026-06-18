@@ -3,7 +3,7 @@ services:
     name: zoomex-thumbnail-agent
     env: python
     plan: starter
-    buildCommand: pip install -r requirements.txt
+    buildCommand: python3 -m pip install -r requirements.txt
     startCommand: python3 thumbnail_agent.py serve --host 0.0.0.0 --port $PORT
     envVars:
       - key: OPENAI_API_KEY
