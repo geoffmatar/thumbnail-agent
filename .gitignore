@@ -1,0 +1,11 @@
+.env
+__pycache__/
+*.pyc
+.DS_Store
+generated/*
+!generated/.gitkeep
+work/*
+!work/.gitkeep
+state/*
+!state/.gitkeep
+styles/

@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Thumbnail Agent</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="workspace">
+        <header class="topbar">
+          <div class="brand-lockup">
+            <div class="zoomex-wordmark" aria-label="ZOOMEX">
+              <span>Z</span><span class="mark">OO</span><span>MEX</span>
+            </div>
+            <h1>Thumbnail Studio</h1>
+            <p id="statusLine">Checking setup...</p>
+          </div>
+          <button id="createBtn" class="primary-btn" type="button">Create Thumbnail</button>
+        </header>
+
+        <section class="studio-layout">
+          <section class="panel control-panel">
+            <div id="keySetup" class="key-setup" hidden>
+              <label class="key-label">
+                <span>OpenAI API key</span>
+                <input id="apiKeyInput" type="password" autocomplete="off" placeholder="sk-...">
+              </label>
+              <button id="saveKeyBtn" class="secondary-btn" type="button">Save Key</button>
+            </div>
+
+            <div class="grid">
+              <label class="dropzone title-card">
+                <span>Title</span>
+                <input id="titleInput" type="text" autocomplete="off" placeholder="THE KID WHO REFUSED TO QUIT">
+                <small>Use | to force the line break.</small>
+              </label>
+            </div>
+
+            <label class="script-label">
+              <span>Script</span>
+              <textarea id="scriptText" rows="15" placeholder="Paste the next video script here..."></textarea>
+            </label>
+
+            <div class="option-row">
+              <span>ZOOMEX template locked</span>
+              <span>Blinker Bold active</span>
+              <span>9:16 export</span>
+            </div>
+          </section>
+
+          <section class="result-panel">
+            <div class="preview-stage">
+              <div class="preview-wrap">
+                <img id="preview" alt="Generated thumbnail preview">
+              </div>
+            </div>
+            <div class="result-copy">
+              <h2 id="resultTitle">Ready for the next thumbnail</h2>
+              <p id="resultPrompt"></p>
+              <a id="downloadLink" class="secondary-btn" href="#" download hidden>Download PNG</a>
+            </div>
+          </section>
+        </section>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

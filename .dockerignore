@@ -1,0 +1,8 @@
+.env
+__pycache__/
+*.pyc
+generated/
+work/
+state/
+styles/
+.DS_Store
