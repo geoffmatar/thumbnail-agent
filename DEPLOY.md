@@ -27,7 +27,7 @@ Do not put `OPENAI_API_KEY` in the code or send it to teammates.
 ```text
 Runtime: Python
 Build command: pip install -r requirements.txt
-Start command: python thumbnail_agent.py serve --host 0.0.0.0 --port $PORT
+Start command: python3 thumbnail_agent.py serve --host 0.0.0.0 --port $PORT
 ```
 
 4. Add the environment variables above.

@@ -57,7 +57,7 @@ When `APP_PASSWORD` is set, the browser asks for a username and password before 
 The hosted app should use:
 
 ```bash
-python thumbnail_agent.py serve --host 0.0.0.0 --port $PORT
+python3 thumbnail_agent.py serve --host 0.0.0.0 --port $PORT
 ```
 
 Generated thumbnails are saved on the server filesystem. On many simple hosts, those files may disappear after a redeploy or restart, so download the PNG after creating it.
