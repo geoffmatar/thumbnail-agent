@@ -307,8 +307,8 @@ textarea:focus {
 
 .result-panel {
   display: grid;
-  grid-template-columns: minmax(280px, 430px) minmax(250px, 1fr);
-  gap: 18px;
+  grid-template-columns: 1fr;
+  gap: 14px;
   padding: 18px;
 }
 
@@ -327,7 +327,7 @@ textarea:focus {
 .preview-wrap {
   display: grid;
   place-items: center;
-  width: min(100%, 390px);
+  width: min(100%, 500px);
   background:
     linear-gradient(180deg, rgba(18, 216, 195, 0.18), rgba(0, 0, 0, 0.72)),
     #050807;
@@ -354,15 +354,16 @@ textarea:focus {
 }
 
 .result-copy {
-  display: grid;
-  align-content: start;
-  gap: 13px;
-  padding-top: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 2px 2px 0;
 }
 
-#resultPrompt {
-  color: var(--muted);
-  line-height: 1.45;
+.result-copy h2 {
+  min-width: 0;
 }
 
 button,
@@ -382,6 +383,13 @@ button,
   background: var(--accent);
   color: var(--ink);
   box-shadow: 0 12px 28px rgba(18, 216, 195, 0.22);
+}
+
+#createBtn {
+  min-width: min(220px, 100%);
+  min-height: 58px;
+  padding: 0 28px;
+  font-size: 18px;
 }
 
 .primary-btn:disabled {
