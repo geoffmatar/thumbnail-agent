@@ -173,6 +173,7 @@ h2 {
   display: grid;
   grid-template-columns: 1fr;
   gap: 12px;
+  height: 100%;
 }
 
 .dropzone {
@@ -187,6 +188,7 @@ h2 {
 
 .title-card {
   min-height: var(--form-top-height);
+  height: var(--form-top-height);
 }
 
 .dropzone small {
@@ -244,11 +246,12 @@ textarea:focus {
   align-content: start;
   gap: 10px;
   min-height: var(--form-top-height);
+  height: var(--form-top-height);
   padding: 16px;
   background:
-    linear-gradient(180deg, rgba(18, 216, 195, 0.12), rgba(255, 255, 255, 0.04)),
-    rgba(0, 0, 0, 0.28);
-  border: 1px solid rgba(18, 216, 195, 0.38);
+    linear-gradient(180deg, rgba(18, 216, 195, 0.08), rgba(255, 255, 255, 0.035)),
+    rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
   border-radius: 8px;
 }
 
