@@ -12,7 +12,14 @@
         <header class="topbar">
           <div class="brand-lockup">
             <img class="zoomex-logo" src="/zoomex-logo.png" alt="ZOOMEX">
-            <h1>Thumbnail agent</h1>
+            <div class="brand-meta">
+              <h1>Thumbnail agent</h1>
+              <div class="option-row" aria-label="Locked thumbnail settings">
+                <span>ZOOMEX template locked</span>
+                <span>Blinker Bold active</span>
+                <span>9:16 export</span>
+              </div>
+            </div>
             <p id="statusLine" class="sr-only" aria-live="polite">Checking setup...</p>
           </div>
           <button id="createBtn" class="primary-btn" type="button">Create Thumbnail</button>
@@ -33,11 +40,6 @@
               <textarea id="scriptText" rows="15" placeholder="Paste your script here..."></textarea>
             </label>
 
-            <div class="option-row">
-              <span>ZOOMEX template locked</span>
-              <span>Blinker Bold active</span>
-              <span>9:16 export</span>
-            </div>
           </section>
 
           <section class="result-panel">
