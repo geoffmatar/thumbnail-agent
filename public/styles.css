@@ -15,6 +15,8 @@
   --shadow: 0 22px 70px rgba(0, 0, 0, 0.42);
   --left-column: minmax(360px, 0.92fr);
   --right-column: minmax(430px, 1.08fr);
+  --form-top-height: 160px;
+  --form-work-height: clamp(600px, 58vh, 780px);
 }
 
 * {
@@ -146,6 +148,7 @@ h2 {
 
 .control-panel {
   display: grid;
+  grid-template-rows: var(--form-top-height) var(--form-work-height);
   gap: 16px;
   padding: 18px;
 }
@@ -174,6 +177,10 @@ h2 {
     rgba(255, 255, 255, 0.04);
   border: 1px solid var(--line);
   border-radius: 8px;
+}
+
+.title-card {
+  min-height: var(--form-top-height);
 }
 
 .dropzone small {
@@ -208,13 +215,16 @@ textarea {
 
 textarea {
   resize: vertical;
-  min-height: 390px;
+  min-height: 0;
+  height: 100%;
   padding: 14px;
   line-height: 1.5;
 }
 
 .script-card {
-  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: var(--form-work-height);
+  height: var(--form-work-height);
 }
 
 .title-card input:focus,
@@ -254,7 +264,9 @@ textarea:focus {
 
 .progress-panel {
   display: grid;
+  align-content: center;
   gap: 10px;
+  min-height: var(--form-top-height);
   padding: 14px;
   background:
     linear-gradient(180deg, rgba(18, 216, 195, 0.12), rgba(255, 255, 255, 0.04)),
@@ -339,16 +351,19 @@ textarea:focus {
 .result-panel {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 14px;
+  grid-template-rows: var(--form-top-height) var(--form-work-height);
+  gap: 16px;
   padding: 18px;
 }
 
 .preview-stage {
   display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
   justify-items: center;
-  align-content: start;
+  align-content: stretch;
   gap: 12px;
-  min-height: 0;
+  min-height: var(--form-work-height);
+  height: var(--form-work-height);
   padding: 16px;
   background:
     linear-gradient(180deg, rgba(18, 216, 195, 0.08), rgba(255, 255, 255, 0.035)),
@@ -360,7 +375,9 @@ textarea:focus {
 .preview-wrap {
   display: grid;
   place-items: center;
-  width: min(100%, 500px);
+  width: auto;
+  height: 100%;
+  max-width: 100%;
   background: rgba(0, 0, 0, 0.42);
   border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 8px;
@@ -437,6 +454,11 @@ button,
     grid-template-columns: 1fr;
   }
 
+  .control-panel,
+  .result-panel {
+    grid-template-rows: auto;
+  }
+
   .topbar {
     align-items: start;
     min-height: 0;
@@ -454,7 +476,21 @@ button,
     justify-self: stretch;
   }
 
+  .title-card,
+  .progress-panel,
+  .script-card,
+  .preview-stage {
+    height: auto;
+    min-height: 0;
+  }
+
   textarea {
+    height: auto;
     min-height: 300px;
+  }
+
+  .preview-wrap {
+    width: min(100%, 500px);
+    height: auto;
   }
 }
