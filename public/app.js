@@ -3,7 +3,6 @@ const statusLine = document.querySelector("#statusLine");
 const titleInput = document.querySelector("#titleInput");
 const scriptText = document.querySelector("#scriptText");
 const preview = document.querySelector("#preview");
-const resultTitle = document.querySelector("#resultTitle");
 const downloadLink = document.querySelector("#downloadLink");
 const progressPanel = document.querySelector("#progressPanel");
 const progressLabel = document.querySelector("#progressLabel");
@@ -163,7 +162,6 @@ async function createThumbnail() {
 
     preview.src = `${result.thumbnail_url}?v=${Date.now()}`;
     preview.style.display = "block";
-    resultTitle.textContent = result.title;
     downloadLink.href = result.thumbnail_url;
     downloadLink.hidden = false;
     setStatus(result.used_ai ? "Done. Saved as a new thumbnail." : "Done with local fallback.");

@@ -330,6 +330,7 @@ textarea:focus {
   display: grid;
   justify-items: center;
   align-content: start;
+  gap: 12px;
   min-height: 0;
   padding: 16px;
   background:
@@ -364,19 +365,6 @@ textarea:focus {
   height: 100%;
   object-fit: contain;
   grid-area: 1 / 1;
-}
-
-.result-copy {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 14px;
-  padding: 2px 2px 0;
-}
-
-.result-copy h2 {
-  min-width: 0;
 }
 
 button,
