@@ -175,6 +175,10 @@ h2 {
   color: var(--muted);
 }
 
+.script-label {
+  padding: 0 16px;
+}
+
 .title-card input,
 textarea {
   width: 100%;
@@ -194,6 +198,10 @@ textarea {
 .title-card input {
   font-weight: 900;
   text-transform: uppercase;
+}
+
+.title-card input::placeholder {
+  text-transform: none;
 }
 
 textarea {
