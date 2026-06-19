@@ -11,6 +11,7 @@ import sys
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 import uuid
 import warnings
@@ -538,6 +539,9 @@ class ThumbnailHandler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         sys.stderr.write("[%s] %s\n" % (self.log_date_time_string(), fmt % args))
 
+    def request_path(self):
+        return urllib.parse.unquote(urllib.parse.urlsplit(self.path).path)
+
     def is_authorized(self):
         password = app_password()
         if not password:
@@ -587,30 +591,32 @@ class ThumbnailHandler(BaseHTTPRequestHandler):
             self.wfile.write(path.read_bytes())
 
     def do_HEAD(self):
-        if self.path == "/healthz":
+        path = self.request_path()
+        if path == "/healthz":
             return self.send_json({"ok": True}, include_body=False)
-        if self.path == "/":
+        if path == "/":
             return self.send_file(PUBLIC_DIR / "index.html", include_body=False)
         if not self.require_authorized(include_body=False):
             return
-        if self.path == "/api/status":
+        if path == "/api/status":
             return self.send_json({"ok": True}, include_body=False)
-        if self.path.startswith("/api/jobs/"):
+        if path.startswith("/api/jobs/"):
             return self.send_json({"ok": True}, include_body=False)
-        if self.path.startswith("/generated/"):
-            return self.send_file(GENERATED_DIR / self.path.removeprefix("/generated/"), include_body=False)
-        if self.path in ["/styles.css", "/app.js"]:
-            return self.send_file(PUBLIC_DIR / self.path.lstrip("/"), include_body=False)
+        if path.startswith("/generated/"):
+            return self.send_file(GENERATED_DIR / path.removeprefix("/generated/"), include_body=False)
+        if path in ["/styles.css", "/app.js"]:
+            return self.send_file(PUBLIC_DIR / path.lstrip("/"), include_body=False)
         self.send_error(404)
 
     def do_GET(self):
-        if self.path == "/healthz":
+        path = self.request_path()
+        if path == "/healthz":
             return self.send_json({"ok": True})
         if not self.require_authorized():
             return
-        if self.path == "/":
+        if path == "/":
             return self.send_file(PUBLIC_DIR / "index.html")
-        if self.path == "/api/status":
+        if path == "/api/status":
             return self.send_json(
                 {
                     "openai_configured": bool(openai_key()),
@@ -621,25 +627,26 @@ class ThumbnailHandler(BaseHTTPRequestHandler):
                     "allow_browser_key_setup": browser_key_setup_allowed(),
                 }
             )
-        if self.path.startswith("/api/jobs/"):
-            job_id = self.path.removeprefix("/api/jobs/").strip("/")
+        if path.startswith("/api/jobs/"):
+            job_id = path.removeprefix("/api/jobs/").strip("/")
             job = get_job(job_id)
             if not job:
                 return self.send_json({"error": "Job not found."}, 404)
             return self.send_json(job)
-        if self.path.startswith("/generated/"):
-            return self.send_file(GENERATED_DIR / self.path.removeprefix("/generated/"))
-        if self.path in ["/styles.css", "/app.js"]:
-            return self.send_file(PUBLIC_DIR / self.path.lstrip("/"))
+        if path.startswith("/generated/"):
+            return self.send_file(GENERATED_DIR / path.removeprefix("/generated/"))
+        if path in ["/styles.css", "/app.js"]:
+            return self.send_file(PUBLIC_DIR / path.lstrip("/"))
         self.send_error(404)
 
     def do_POST(self):
+        path = self.request_path()
         if not self.require_authorized():
             return
-        if self.path == "/api/settings":
+        if path == "/api/settings":
             return self.send_json({"error": "API key setup is disabled. Set OPENAI_API_KEY on the server."}, 403)
 
-        if self.path != "/api/create":
+        if path != "/api/create":
             self.send_error(404)
             return
 
