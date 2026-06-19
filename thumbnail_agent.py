@@ -8,6 +8,7 @@ import os
 import re
 import shutil
 import sys
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -37,6 +38,9 @@ CANVAS_SIZE = (1080, 1920)
 TOP_BAND = {"x": 160, "y": 1243, "w": 760, "h": 116, "radius": 62}
 BOTTOM_BAND = {"x": 160, "y": 1366, "w": 760, "h": 126, "radius": 64}
 FOCUS_ZONE = {"x": 210, "y": 560, "w": 660, "h": 660}
+JOB_TTL_SECONDS = 60 * 60 * 3
+JOBS = {}
+JOBS_LOCK = threading.Lock()
 
 
 def focus_zone_prompt():
@@ -392,7 +396,7 @@ def field_value(form, name, default=""):
     return value
 
 
-def handle_create(script_text, title, subject_path=None):
+def handle_create(script_text, title, subject_path=None, progress_callback=None):
     ensure_dirs()
     title = title.strip()
     if not title:
@@ -400,14 +404,22 @@ def handle_create(script_text, title, subject_path=None):
     if not script_text.strip():
         raise RuntimeError("Paste the script first.")
 
+    if progress_callback:
+        progress_callback(12, "Reading the script and building the visual brief...")
     brief = create_visual_brief(script_text, title)
+    if progress_callback:
+        progress_callback(34, "Visual direction ready. Generating the subject image...")
     used_ai = bool(openai_key())
     if not subject_path:
         subject_path = generate_subject_image(brief)
 
+    if progress_callback:
+        progress_callback(82, "Image generated. Applying the ZOOMEX template and title...")
     timestamp = time.strftime("%Y%m%d-%H%M%S")
     output_path = GENERATED_DIR / f"{timestamp}-{safe_filename(title)}.png"
     render_thumbnail(title, subject_path, output_path)
+    if progress_callback:
+        progress_callback(96, "Saving the finished thumbnail...")
 
     meta = {
         "title": title,
@@ -421,6 +433,105 @@ def handle_create(script_text, title, subject_path=None):
     }
     save_json(output_path.with_suffix(".json"), meta)
     return meta
+
+
+def cleanup_jobs():
+    cutoff = time.time() - JOB_TTL_SECONDS
+    with JOBS_LOCK:
+        expired = [
+            job_id
+            for job_id, job in JOBS.items()
+            if job.get("finished_at") and job["finished_at"] < cutoff
+        ]
+        for job_id in expired:
+            JOBS.pop(job_id, None)
+
+
+def update_job(job_id, **updates):
+    with JOBS_LOCK:
+        job = JOBS.get(job_id)
+        if not job:
+            return
+        job.update(updates)
+        job["updated_at"] = time.time()
+
+
+def public_job(job):
+    now = time.time()
+    started_at = job.get("started_at") or now
+    payload = {
+        "id": job["id"],
+        "status": job["status"],
+        "progress": job["progress"],
+        "message": job["message"],
+        "elapsed_seconds": max(0, round(now - started_at)),
+        "result": job.get("result"),
+        "error": job.get("error", ""),
+    }
+    if job.get("finished_at"):
+        payload["elapsed_seconds"] = max(0, round(job["finished_at"] - started_at))
+    return payload
+
+
+def get_job(job_id):
+    cleanup_jobs()
+    with JOBS_LOCK:
+        job = JOBS.get(job_id)
+        return public_job(job) if job else None
+
+
+def run_create_job(job_id, script_text, title):
+    def progress(progress_value, message):
+        update_job(job_id, status="running", progress=progress_value, message=message)
+
+    try:
+        progress(6, "Starting thumbnail generation...")
+        meta = handle_create(script_text=script_text, title=title, progress_callback=progress)
+        thumbnail_name = Path(meta["thumbnail"]).name
+        result = {
+            "title": meta["title"],
+            "visual_prompt": meta["visual_prompt"],
+            "thumbnail_url": f"/generated/{thumbnail_name}",
+            "used_ai": meta["used_ai"],
+        }
+        update_job(
+            job_id,
+            status="done",
+            progress=100,
+            message="Done. Your thumbnail is ready.",
+            result=result,
+            finished_at=time.time(),
+        )
+    except Exception as error:
+        update_job(
+            job_id,
+            status="error",
+            progress=100,
+            message="Thumbnail creation failed.",
+            error=str(error),
+            finished_at=time.time(),
+        )
+
+
+def start_create_job(script_text, title):
+    cleanup_jobs()
+    job_id = uuid.uuid4().hex
+    now = time.time()
+    with JOBS_LOCK:
+        JOBS[job_id] = {
+            "id": job_id,
+            "status": "queued",
+            "progress": 0,
+            "message": "Queued...",
+            "started_at": now,
+            "updated_at": now,
+            "finished_at": None,
+            "result": None,
+            "error": "",
+        }
+    thread = threading.Thread(target=run_create_job, args=(job_id, script_text, title), daemon=True)
+    thread.start()
+    return job_id
 
 
 class ThumbnailHandler(BaseHTTPRequestHandler):
@@ -486,6 +597,8 @@ class ThumbnailHandler(BaseHTTPRequestHandler):
             return
         if self.path == "/api/status":
             return self.send_json({"ok": True}, include_body=False)
+        if self.path.startswith("/api/jobs/"):
+            return self.send_json({"ok": True}, include_body=False)
         if self.path.startswith("/generated/"):
             return self.send_file(GENERATED_DIR / self.path.removeprefix("/generated/"), include_body=False)
         if self.path in ["/styles.css", "/app.js"]:
@@ -510,6 +623,12 @@ class ThumbnailHandler(BaseHTTPRequestHandler):
                     "allow_browser_key_setup": browser_key_setup_allowed(),
                 }
             )
+        if self.path.startswith("/api/jobs/"):
+            job_id = self.path.removeprefix("/api/jobs/").strip("/")
+            job = get_job(job_id)
+            if not job:
+                return self.send_json({"error": "Job not found."}, 404)
+            return self.send_json(job)
         if self.path.startswith("/generated/"):
             return self.send_file(GENERATED_DIR / self.path.removeprefix("/generated/"))
         if self.path in ["/styles.css", "/app.js"]:
@@ -553,15 +672,13 @@ class ThumbnailHandler(BaseHTTPRequestHandler):
             if not script_text:
                 return self.send_json({"error": "Paste the script first."}, 400)
 
-            meta = handle_create(script_text=script_text, title=title)
-            thumbnail_name = Path(meta["thumbnail"]).name
+            job_id = start_create_job(script_text=script_text, title=title)
             return self.send_json(
                 {
-                    "title": meta["title"],
-                    "visual_prompt": meta["visual_prompt"],
-                    "thumbnail_url": f"/generated/{thumbnail_name}",
-                    "used_ai": meta["used_ai"],
-                }
+                    "job_id": job_id,
+                    "status_url": f"/api/jobs/{job_id}",
+                },
+                202,
             )
         except Exception as error:
             return self.send_json({"error": str(error)}, 500)
