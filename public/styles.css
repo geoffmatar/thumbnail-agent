@@ -75,23 +75,14 @@ body::before {
 
 .brand-lockup {
   display: grid;
-  gap: 6px;
+  gap: 8px;
 }
 
-.zoomex-wordmark {
-  width: fit-content;
-  padding: 4px 0;
-  color: #fff;
-  font-weight: 950;
-  font-size: clamp(42px, 4vw, 62px);
-  line-height: 0.9;
-  letter-spacing: 0;
-  text-transform: uppercase;
-}
-
-.zoomex-wordmark .mark {
-  color: var(--accent);
-  letter-spacing: -1px;
+.zoomex-logo {
+  display: block;
+  width: clamp(250px, 26vw, 360px);
+  height: auto;
+  max-width: 100%;
 }
 
 h1,
@@ -101,8 +92,9 @@ p {
 }
 
 h1 {
-  font-size: clamp(26px, 2.6vw, 40px);
-  line-height: 1;
+  font-size: clamp(16px, 1.4vw, 22px);
+  line-height: 1.1;
+  font-weight: 400;
   letter-spacing: 0;
 }
 
@@ -425,12 +417,12 @@ button,
     align-items: start;
   }
 
-  .zoomex-wordmark {
-    font-size: 40px;
+  .zoomex-logo {
+    width: min(280px, 100%);
   }
 
   h1 {
-    font-size: 30px;
+    font-size: 18px;
   }
 
   #createBtn {
