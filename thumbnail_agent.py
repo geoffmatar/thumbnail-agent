@@ -443,37 +443,54 @@ class ThumbnailHandler(BaseHTTPRequestHandler):
         provided_password = decoded.split(":", 1)[1] if ":" in decoded else ""
         return hmac.compare_digest(provided_password, password)
 
-    def require_authorized(self):
+    def require_authorized(self, include_body=True):
         if self.is_authorized():
             return True
-        body = b"Authentication required."
+        body = b"Authentication required." if include_body else b""
         self.send_response(401)
         self.send_header("WWW-Authenticate", 'Basic realm="ZOOMEX Thumbnail Agent"')
         self.send_header("Content-Type", "text/plain")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
-        self.wfile.write(body)
+        if include_body:
+            self.wfile.write(body)
         return False
 
-    def send_json(self, payload, status=200):
+    def send_json(self, payload, status=200, include_body=True):
         body = json.dumps(payload).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
-        self.wfile.write(body)
+        if include_body:
+            self.wfile.write(body)
 
-    def send_file(self, path):
+    def send_file(self, path, include_body=True):
         path = Path(path)
         if not path.exists() or not path.is_file():
             self.send_error(404)
             return
-        body = path.read_bytes()
         self.send_response(200)
         self.send_header("Content-Type", mimetypes.guess_type(str(path))[0] or "application/octet-stream")
-        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Content-Length", str(path.stat().st_size))
         self.end_headers()
-        self.wfile.write(body)
+        if include_body:
+            self.wfile.write(path.read_bytes())
+
+    def do_HEAD(self):
+        if self.path == "/healthz":
+            return self.send_json({"ok": True}, include_body=False)
+        if self.path == "/":
+            return self.send_file(PUBLIC_DIR / "index.html", include_body=False)
+        if not self.require_authorized(include_body=False):
+            return
+        if self.path == "/api/status":
+            return self.send_json({"ok": True}, include_body=False)
+        if self.path.startswith("/generated/"):
+            return self.send_file(GENERATED_DIR / self.path.removeprefix("/generated/"), include_body=False)
+        if self.path in ["/styles.css", "/app.js"]:
+            return self.send_file(PUBLIC_DIR / self.path.lstrip("/"), include_body=False)
+        self.send_error(404)
 
     def do_GET(self):
         if self.path == "/healthz":
