@@ -222,9 +222,13 @@ textarea {
 }
 
 textarea {
-  resize: vertical;
+  justify-self: center;
+  width: auto;
+  max-width: 100%;
+  resize: none;
   min-height: 0;
   height: 100%;
+  aspect-ratio: 9 / 16;
   padding: 14px;
   line-height: 1.5;
 }
@@ -465,6 +469,11 @@ button,
   }
 
   textarea {
+    justify-self: stretch;
+    width: 100%;
+    max-width: none;
+    aspect-ratio: auto;
+    resize: vertical;
     height: auto;
     min-height: 300px;
   }
