@@ -13,6 +13,8 @@
   --warm: #f0dfbf;
   --danger: #ff6b6b;
   --shadow: 0 22px 70px rgba(0, 0, 0, 0.42);
+  --left-column: minmax(360px, 0.92fr);
+  --right-column: minmax(430px, 1.08fr);
 }
 
 * {
@@ -59,9 +61,9 @@ body::before {
 }
 
 .topbar {
-  display: flex;
+  display: grid;
+  grid-template-columns: var(--left-column) var(--right-column);
   align-items: end;
-  justify-content: space-between;
   gap: 18px;
   padding: 16px 18px;
   background: rgba(4, 10, 9, 0.64);
@@ -73,7 +75,7 @@ body::before {
 
 .brand-lockup {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .zoomex-wordmark {
@@ -81,7 +83,7 @@ body::before {
   padding: 4px 0;
   color: #fff;
   font-weight: 950;
-  font-size: 30px;
+  font-size: clamp(42px, 4vw, 62px);
   line-height: 0.9;
   letter-spacing: 0;
   text-transform: uppercase;
@@ -99,7 +101,7 @@ p {
 }
 
 h1 {
-  font-size: clamp(28px, 3vw, 44px);
+  font-size: clamp(26px, 2.6vw, 40px);
   line-height: 1;
   letter-spacing: 0;
 }
@@ -116,7 +118,7 @@ h2 {
 
 .studio-layout {
   display: grid;
-  grid-template-columns: minmax(360px, 0.92fr) minmax(430px, 1.08fr);
+  grid-template-columns: var(--left-column) var(--right-column);
   gap: 18px;
   align-items: start;
 }
@@ -386,7 +388,8 @@ button,
 }
 
 #createBtn {
-  min-width: min(220px, 100%);
+  justify-self: stretch;
+  width: 100%;
   min-height: 58px;
   padding: 0 28px;
   font-size: 18px;
@@ -419,12 +422,19 @@ button,
   }
 
   .topbar {
-    display: grid;
     align-items: start;
   }
 
-  .primary-btn {
-    width: 100%;
+  .zoomex-wordmark {
+    font-size: 40px;
+  }
+
+  h1 {
+    font-size: 30px;
+  }
+
+  #createBtn {
+    justify-self: stretch;
   }
 
   textarea {
