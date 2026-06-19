@@ -143,13 +143,11 @@ h2 {
   padding: 18px;
 }
 
-.script-label,
 .dropzone {
   display: grid;
   gap: 8px;
 }
 
-.script-label span,
 .dropzone span {
   font-weight: 850;
   color: #ffffff;
@@ -173,10 +171,6 @@ h2 {
 
 .dropzone small {
   color: var(--muted);
-}
-
-.script-label {
-  padding: 0 16px;
 }
 
 .title-card input,
@@ -209,6 +203,10 @@ textarea {
   min-height: 390px;
   padding: 14px;
   line-height: 1.5;
+}
+
+.script-card {
+  min-height: 0;
 }
 
 .title-card input:focus,
