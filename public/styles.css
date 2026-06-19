@@ -16,7 +16,7 @@
   --left-column: minmax(360px, 0.92fr);
   --right-column: minmax(430px, 1.08fr);
   --form-top-height: 148px;
-  --form-work-height: clamp(600px, 58vh, 780px);
+  --form-work-height: clamp(500px, 52vh, 660px);
 }
 
 * {
@@ -222,13 +222,13 @@ textarea {
 }
 
 textarea {
-  justify-self: center;
-  width: auto;
-  max-width: 100%;
-  resize: none;
+  justify-self: stretch;
+  width: 100%;
+  max-width: none;
+  resize: vertical;
   min-height: 0;
   height: 100%;
-  aspect-ratio: 9 / 16;
+  aspect-ratio: auto;
   padding: 14px;
   line-height: 1.5;
 }
