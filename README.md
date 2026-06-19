@@ -23,7 +23,7 @@ The generated background is prompted so the important subject details land in th
 
 ## Setup
 
-Add your OpenAI API key in the app, or put it in `.env`:
+Put your OpenAI API key in `.env` for local use:
 
 ```bash
 OPENAI_API_KEY="your_api_key_here"

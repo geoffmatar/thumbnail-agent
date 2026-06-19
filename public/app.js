@@ -1,8 +1,5 @@
 const createBtn = document.querySelector("#createBtn");
 const statusLine = document.querySelector("#statusLine");
-const keySetup = document.querySelector("#keySetup");
-const apiKeyInput = document.querySelector("#apiKeyInput");
-const saveKeyBtn = document.querySelector("#saveKeyBtn");
 const titleInput = document.querySelector("#titleInput");
 const scriptText = document.querySelector("#scriptText");
 const preview = document.querySelector("#preview");
@@ -110,44 +107,14 @@ function setStatus(message, isError = false) {
 async function loadStatus() {
   try {
     const status = await readJson("/api/status");
-    const keyText = status.openai_configured ? "OpenAI ready" : "OpenAI key missing";
     const designText = status.design_ready ? "ZOOMEX design ready" : "design missing";
     const fontText = status.font_ready ? "Blinker ready" : "font missing";
-    keySetup.hidden = status.openai_configured || !status.allow_browser_key_setup;
-    setStatus(`${keyText} | ${designText} | ${fontText} | model: ${status.model}`);
-    if (!status.openai_configured && !status.allow_browser_key_setup) {
+    setStatus(`${designText} | ${fontText} | ready to create`);
+    if (!status.openai_configured) {
       setStatus("Server OpenAI key missing. Ask the app admin to set OPENAI_API_KEY.", true);
     }
   } catch (error) {
     setStatus(error.message, true);
-  }
-}
-
-async function saveApiKey() {
-  const apiKey = apiKeyInput.value.trim();
-  if (!apiKey) {
-    setStatus("Paste your OpenAI API key first.", true);
-    apiKeyInput.focus();
-    return;
-  }
-
-  saveKeyBtn.disabled = true;
-  setStatus("Saving key locally...");
-
-  try {
-    const response = await fetch("/api/settings", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ openai_api_key: apiKey }),
-    });
-    const payload = await response.json();
-    if (!response.ok) throw new Error(payload.error || "Could not save the key.");
-    apiKeyInput.value = "";
-    await loadStatus();
-  } catch (error) {
-    setStatus(error.message, true);
-  } finally {
-    saveKeyBtn.disabled = false;
   }
 }
 
@@ -216,6 +183,5 @@ async function createThumbnail() {
   }
 }
 
-saveKeyBtn.addEventListener("click", saveApiKey);
 createBtn.addEventListener("click", createThumbnail);
 loadStatus();

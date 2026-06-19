@@ -111,9 +111,7 @@ def app_password():
 
 
 def browser_key_setup_allowed():
-    if os.environ.get("ALLOW_BROWSER_API_KEY_SETUP", "").strip() == "1":
-        return True
-    return not app_password()
+    return False
 
 
 def safe_filename(value, fallback="thumbnail"):
@@ -639,18 +637,7 @@ class ThumbnailHandler(BaseHTTPRequestHandler):
         if not self.require_authorized():
             return
         if self.path == "/api/settings":
-            if not browser_key_setup_allowed():
-                return self.send_json({"error": "API key setup is disabled on this hosted app. Set OPENAI_API_KEY on the server."}, 403)
-            try:
-                length = int(self.headers.get("Content-Length", "0"))
-                payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
-                api_key = str(payload.get("openai_api_key", "")).strip()
-                if not api_key:
-                    return self.send_json({"error": "Paste your OpenAI API key first."}, 400)
-                save_env_value("OPENAI_API_KEY", api_key)
-                return self.send_json({"ok": True, "openai_configured": True})
-            except Exception as error:
-                return self.send_json({"error": str(error)}, 500)
+            return self.send_json({"error": "API key setup is disabled. Set OPENAI_API_KEY on the server."}, 403)
 
         if self.path != "/api/create":
             self.send_error(404)

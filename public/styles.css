@@ -136,25 +136,12 @@ h2 {
   padding: 18px;
 }
 
-.key-setup {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
-  align-items: end;
-  padding: 14px;
-  background: rgba(18, 216, 195, 0.08);
-  border: 1px solid var(--line-bright);
-  border-radius: 8px;
-}
-
-.key-label,
 .script-label,
 .dropzone {
   display: grid;
   gap: 8px;
 }
 
-.key-label span,
 .script-label span,
 .dropzone span {
   font-weight: 850;
@@ -181,7 +168,6 @@ h2 {
   color: var(--muted);
 }
 
-.key-label input,
 .title-card input,
 textarea {
   width: 100%;
@@ -193,7 +179,6 @@ textarea {
   outline: none;
 }
 
-.key-label input,
 .title-card input {
   min-height: 48px;
   padding: 0 13px;
@@ -211,7 +196,6 @@ textarea {
   line-height: 1.5;
 }
 
-.key-label input:focus,
 .title-card input:focus,
 textarea:focus {
   border-color: var(--accent);
@@ -422,8 +406,7 @@ button,
 @media (max-width: 980px) {
   .topbar,
   .studio-layout,
-  .result-panel,
-  .key-setup {
+  .result-panel {
     grid-template-columns: 1fr;
   }
 
