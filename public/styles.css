@@ -407,6 +407,12 @@ body.alliance-mode .studio-logo {
   width: clamp(300px, 29vw, 420px);
 }
 
+body.alliance-mode .studio-logo,
+body.alliance-black-mode .studio-logo,
+body.alliance-lgbtq-mode .studio-logo {
+  border-radius: 8px;
+}
+
 body.alliance-black-mode .studio-logo {
   width: clamp(300px, 29vw, 420px);
 }
