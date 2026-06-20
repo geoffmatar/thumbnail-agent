@@ -294,9 +294,9 @@ body.zoomex-mode::before {
   display: grid;
   grid-template-columns: var(--left-column) var(--right-column);
   align-items: center;
-  gap: 18px;
+  gap: clamp(28px, 4vw, 68px);
   min-height: 150px;
-  padding: 22px 18px;
+  padding: 28px 24px;
   background: rgba(4, 10, 9, 0.64);
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -474,16 +474,14 @@ textarea:focus {
 
 .progress-panel {
   display: grid;
-  align-content: start;
-  gap: 10px;
-  min-height: var(--form-top-height);
-  height: var(--form-top-height);
-  padding: 16px;
-  background:
-    linear-gradient(180deg, rgba(18, 216, 195, 0.08), rgba(255, 255, 255, 0.035)),
-    rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--line);
-  border-radius: 8px;
+  align-content: center;
+  gap: 13px;
+  min-height: clamp(116px, 12vw, 150px);
+  height: auto;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
 }
 
 .progress-head {
@@ -496,21 +494,28 @@ textarea:focus {
 #progressLabel {
   min-width: 0;
   color: #ffffff;
+  font-size: clamp(19px, 1.8vw, 26px);
+  line-height: 1.05;
   font-weight: 850;
 }
 
 #progressPercent {
   color: var(--accent);
+  font-size: clamp(22px, 2vw, 30px);
+  line-height: 1;
   font-weight: 950;
   font-variant-numeric: tabular-nums;
 }
 
 .progress-track {
-  height: 12px;
+  height: 10px;
   overflow: hidden;
   border: 1px solid rgba(18, 216, 195, 0.3);
   border-radius: 999px;
-  background: rgba(0, 0, 0, 0.46);
+  background: rgba(0, 0, 0, 0.5);
+  box-shadow:
+    inset 0 0 0 1px rgba(18, 216, 195, 0.12),
+    0 0 18px rgba(18, 216, 195, 0.08);
 }
 
 .progress-fill {
@@ -535,7 +540,7 @@ textarea:focus {
 }
 
 .progress-panel.error {
-  border-color: rgba(255, 107, 107, 0.48);
+  color: var(--danger);
 }
 
 .progress-panel.error .progress-fill {
@@ -547,9 +552,14 @@ textarea:focus {
   color: var(--danger);
 }
 
+.progress-panel.error #progressLabel {
+  color: var(--danger);
+}
+
 .progress-meta {
   color: var(--muted);
-  font-size: 13px;
+  font-size: clamp(13px, 1.15vw, 16px);
+  line-height: 1.35;
   font-variant-numeric: tabular-nums;
 }
 
