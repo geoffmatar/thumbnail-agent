@@ -117,6 +117,11 @@
               </label>
             </div>
 
+            <label class="dropzone reference-card" for="personReference">
+              <input id="personReference" type="file" accept="image/*">
+              <span id="referenceFileName">Optional: If you want a specific person in the thumbnail, upload a reference image here.</span>
+            </label>
+
             <div class="dropzone script-card">
               <span>Script</span>
               <textarea id="scriptText" rows="15" placeholder="Paste your script here..."></textarea>
@@ -130,12 +135,6 @@
             </div>
 
             <div class="preview-stage">
-              <div class="reference-row">
-                <label class="reference-upload preview-reference" for="personReference">
-                  <input id="personReference" type="file" accept="image/*">
-                  <span id="referenceFileName">Want a specific person? Upload their photo.</span>
-                </label>
-              </div>
               <div class="preview-wrap">
                 <img id="preview" alt="Generated thumbnail preview">
               </div>

@@ -388,7 +388,7 @@ h2 {
 
 .control-panel {
   display: grid;
-  grid-template-rows: var(--form-top-height) var(--form-work-height);
+  grid-template-rows: var(--form-top-height) 92px calc(var(--form-work-height) - 108px);
   gap: 16px;
   padding: 18px;
 }
@@ -403,30 +403,23 @@ h2 {
   color: #ffffff;
 }
 
-.reference-upload {
+.reference-card {
   position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 0;
-  max-width: 260px;
-  min-height: 34px;
-  padding: 0 13px;
-  color: rgba(245, 248, 244, 0.84);
-  background: rgba(255, 255, 255, 0.07);
-  border: 1px solid rgba(18, 216, 195, 0.28);
-  border-radius: 999px;
+  align-content: center;
+  min-height: 92px;
+  height: 92px;
   cursor: pointer;
 }
 
-.reference-upload:hover,
-.reference-upload:focus-within {
-  color: #ffffff;
-  border-color: rgba(18, 216, 195, 0.52);
-  background: rgba(18, 216, 195, 0.12);
+.reference-card:hover,
+.reference-card:focus-within {
+  border-color: rgba(18, 216, 195, 0.5);
+  background:
+    linear-gradient(180deg, rgba(18, 216, 195, 0.12), rgba(255, 255, 255, 0.045)),
+    rgba(255, 255, 255, 0.045);
 }
 
-.reference-upload input {
+.reference-card input {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -437,22 +430,10 @@ h2 {
 #referenceFileName {
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 13px;
-  font-weight: 800;
-}
-
-.reference-row {
-  display: grid;
-  justify-content: center;
-  justify-items: center;
-  width: min(100%, 460px);
-}
-
-.preview-reference {
-  width: 100%;
-  max-width: 460px;
-  min-height: 42px;
+  color: rgba(245, 248, 244, 0.9);
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.3;
 }
 
 .grid {
@@ -521,8 +502,8 @@ textarea {
 
 .script-card {
   grid-template-rows: auto minmax(0, 1fr);
-  min-height: var(--form-work-height);
-  height: var(--form-work-height);
+  min-height: calc(var(--form-work-height) - 108px);
+  height: calc(var(--form-work-height) - 108px);
 }
 
 .title-card input:focus,
@@ -644,7 +625,7 @@ textarea:focus {
 
 .preview-stage {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr) auto;
   justify-items: center;
   align-content: stretch;
   gap: 12px;
@@ -776,14 +757,6 @@ button,
     justify-self: start;
   }
 
-  .reference-upload {
-    max-width: none;
-  }
-
-  .reference-row {
-    width: 100%;
-  }
-
   .topbar,
   .studio-layout,
   .result-panel {
@@ -814,6 +787,7 @@ button,
   }
 
   .title-card,
+  .reference-card,
   .progress-panel,
   .create-panel,
   .script-card,
