@@ -95,31 +95,8 @@ body.zoomex-mode::before {
 .home-nav {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 18px;
-}
-
-.media-logo {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 7px;
-  line-height: 1;
-}
-
-.media-number {
-  color: transparent;
-  background: linear-gradient(90deg, #ff7c92, #6e3ef0 48%, #10c8d2);
-  background-clip: text;
-  -webkit-background-clip: text;
-  font-size: 25px;
-  font-weight: 800;
-  letter-spacing: -0.01em;
-}
-
-.media-word {
-  color: #4d4757;
-  font-size: 14px;
-  font-weight: 700;
 }
 
 .home-pill {
@@ -147,17 +124,16 @@ body.zoomex-mode::before {
 .home-copy {
   display: grid;
   justify-items: center;
-  gap: 12px;
+  gap: 16px;
   width: min(760px, 100%);
   text-align: center;
 }
 
-.home-kicker {
-  color: #6740ef;
-  font-size: 13px;
-  font-weight: 900;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+.home-logo {
+  display: block;
+  width: clamp(120px, 12vw, 180px);
+  height: auto;
+  filter: drop-shadow(0 22px 42px rgba(103, 64, 239, 0.16));
 }
 
 .home-title {
