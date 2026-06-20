@@ -119,8 +119,8 @@ body.zoomex-mode::before {
 .home-title {
   max-width: 760px;
   color: #5a4868;
-  font-size: clamp(42px, 4.5vw, 56px);
-  line-height: 0.98;
+  font-size: clamp(26px, 2.8vw, 36px);
+  line-height: 1.05;
   font-weight: 900;
   letter-spacing: 0;
 }
