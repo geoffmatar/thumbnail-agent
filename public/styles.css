@@ -137,17 +137,19 @@ body.zoomex-mode::before {
 
 .home-hero {
   display: grid;
-  grid-template-columns: minmax(320px, 0.95fr) minmax(360px, 1.05fr);
-  align-items: center;
-  gap: 46px;
+  grid-template-columns: 1fr;
+  justify-items: center;
+  gap: 30px;
   min-height: calc(100vh - 120px);
-  padding: 46px 0 18px;
+  padding: 56px 0 18px;
 }
 
 .home-copy {
   display: grid;
-  gap: 18px;
-  max-width: 650px;
+  justify-items: center;
+  gap: 12px;
+  width: min(760px, 100%);
+  text-align: center;
 }
 
 .home-kicker {
@@ -159,7 +161,7 @@ body.zoomex-mode::before {
 }
 
 .home-title {
-  max-width: 680px;
+  max-width: 760px;
   color: #5a4868;
   font-size: 64px;
   line-height: 0.98;
@@ -167,31 +169,22 @@ body.zoomex-mode::before {
   letter-spacing: 0;
 }
 
-.home-subtitle {
-  max-width: 560px;
-  color: #736a7f;
-  font-size: 18px;
-  line-height: 1.45;
-  font-weight: 650;
-}
-
 .project-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  grid-template-columns: 1fr;
+  gap: 12px;
   justify-items: stretch;
+  width: min(980px, 100%);
 }
 
 .project-tile {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-areas:
-    "logo action"
-    "copy action";
-  gap: 22px;
+  grid-template-columns: 176px minmax(0, 1fr) auto;
+  grid-template-areas: "logo copy action";
+  gap: 20px;
   align-items: center;
-  min-height: 288px;
-  padding: 34px;
+  min-height: 112px;
+  padding: 18px;
   text-align: left;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(247, 244, 253, 0.9)),
@@ -201,16 +194,13 @@ body.zoomex-mode::before {
   box-shadow: 0 28px 70px rgba(67, 54, 86, 0.13);
 }
 
-.project-tile-featured {
-  grid-column: 1 / -1;
-}
-
 .project-logo-wrap {
   grid-area: logo;
   display: grid;
-  align-items: center;
-  min-height: 116px;
-  padding: 24px;
+  place-items: center;
+  width: 176px;
+  height: 68px;
+  padding: 12px;
   overflow: hidden;
   background: #050908;
   border-radius: 8px;
@@ -218,7 +208,7 @@ body.zoomex-mode::before {
 
 .project-logo {
   display: block;
-  width: min(330px, 100%);
+  width: min(150px, 100%);
   height: auto;
 }
 
@@ -230,7 +220,7 @@ body.zoomex-mode::before {
 
 .project-name {
   color: #30263c;
-  font-size: 28px;
+  font-size: 24px;
   line-height: 1;
   font-weight: 900;
 }
@@ -262,13 +252,11 @@ body.zoomex-mode::before {
 }
 
 .project-tile-pending {
-  grid-template-columns: auto minmax(0, 1fr);
-  grid-template-areas: "mark copy";
-  min-height: 120px;
-  padding: 18px;
+  grid-template-columns: 176px minmax(0, 1fr) auto;
+  grid-template-areas: "mark copy status";
+  min-height: 112px;
   cursor: default;
   opacity: 1;
-  box-shadow: 0 18px 42px rgba(67, 54, 86, 0.08);
 }
 
 .project-tile-pending:hover,
@@ -281,8 +269,8 @@ body.zoomex-mode::before {
   grid-area: mark;
   display: inline-grid;
   place-items: center;
-  width: 54px;
-  height: 54px;
+  width: 68px;
+  height: 68px;
   color: #ffffff;
   background: linear-gradient(135deg, #6740ef, #13c9c5);
   border-radius: 8px;
@@ -291,12 +279,26 @@ body.zoomex-mode::before {
 }
 
 .project-tile-pending .project-name {
-  font-size: 19px;
-  line-height: 1.08;
+  font-size: 24px;
+  line-height: 1;
 }
 
 .project-tile-pending .project-role {
-  font-size: 13px;
+  font-size: 15px;
+}
+
+.project-status {
+  grid-area: status;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 92px;
+  min-height: 46px;
+  color: #83788e;
+  background: rgba(103, 64, 239, 0.08);
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 900;
 }
 
 .app-shell {
@@ -699,27 +701,28 @@ button,
     font-size: 44px;
   }
 
-  .home-subtitle {
-    font-size: 16px;
-  }
-
   .project-tile {
-    grid-template-columns: 1fr;
-    grid-template-areas:
-      "logo"
-      "copy"
-      "action";
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "logo" "copy" "action";
     min-height: 0;
     padding: 22px;
   }
 
+  .project-logo-wrap {
+    width: 100%;
+  }
+
   .project-tile-pending {
     grid-template-columns: auto minmax(0, 1fr);
-    grid-template-areas: "mark copy";
+    grid-template-areas: "mark copy" "status status";
     padding: 18px;
   }
 
   .project-action {
+    justify-self: start;
+  }
+
+  .project-status {
     justify-self: start;
   }
 
