@@ -178,7 +178,7 @@ body.zoomex-mode::before {
   place-items: center;
   width: 176px;
   height: 68px;
-  padding: 12px;
+  padding: 10px;
   overflow: hidden;
   background: #050908;
   border-radius: 8px;
@@ -186,8 +186,14 @@ body.zoomex-mode::before {
 
 .project-logo {
   display: block;
-  width: min(150px, 100%);
-  height: auto;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.client-logo-wrap {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(103, 64, 239, 0.1);
 }
 
 .project-copy {
@@ -231,7 +237,7 @@ body.zoomex-mode::before {
 
 .project-tile-pending {
   grid-template-columns: 176px minmax(0, 1fr) auto;
-  grid-template-areas: "mark copy status";
+  grid-template-areas: "logo copy status";
   min-height: 112px;
   cursor: default;
   opacity: 1;
@@ -244,7 +250,7 @@ body.zoomex-mode::before {
 }
 
 .project-mark {
-  grid-area: mark;
+  grid-area: logo;
   display: inline-grid;
   place-items: center;
   width: 68px;
@@ -754,14 +760,20 @@ button,
     padding: 22px;
   }
 
-  .project-logo-wrap {
+  .project-tile:not(.project-tile-pending) .project-logo-wrap {
     width: 100%;
   }
 
   .project-tile-pending {
     grid-template-columns: auto minmax(0, 1fr);
-    grid-template-areas: "mark copy" "status status";
+    grid-template-areas: "logo copy" "status status";
     padding: 18px;
+  }
+
+  .project-tile-pending .project-logo-wrap {
+    width: 112px;
+    height: 48px;
+    padding: 7px;
   }
 
   .project-action {
