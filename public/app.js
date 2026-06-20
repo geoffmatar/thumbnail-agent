@@ -119,7 +119,7 @@ function updateReferenceFileName() {
   const file = personReference.files && personReference.files[0];
   referenceFileName.textContent = file
     ? file.name
-    : "Optional: If you want a specific person in the thumbnail, upload a reference image here.";
+    : "Upload image";
 }
 
 async function loadStatus() {

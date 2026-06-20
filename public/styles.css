@@ -388,7 +388,7 @@ h2 {
 
 .control-panel {
   display: grid;
-  grid-template-rows: var(--form-top-height) 92px calc(var(--form-work-height) - 108px);
+  grid-template-rows: var(--form-top-height) 126px calc(var(--form-work-height) - 142px);
   gap: 16px;
   padding: 18px;
 }
@@ -405,9 +405,9 @@ h2 {
 
 .reference-card {
   position: relative;
-  align-content: center;
-  min-height: 92px;
-  height: 92px;
+  grid-template-rows: auto minmax(48px, 1fr) auto;
+  min-height: 126px;
+  height: 126px;
   cursor: pointer;
 }
 
@@ -430,10 +430,22 @@ h2 {
 #referenceFileName {
   overflow: hidden;
   text-overflow: ellipsis;
-  color: rgba(245, 248, 244, 0.9);
-  font-size: 14px;
-  font-weight: 650;
-  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.reference-button {
+  display: inline-grid;
+  width: 100%;
+  min-height: 48px;
+  place-items: center;
+  padding: 0 13px;
+  color: rgba(245, 248, 244, 0.66);
+  background: rgba(0, 0, 0, 0.42);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1;
 }
 
 .grid {
@@ -502,11 +514,12 @@ textarea {
 
 .script-card {
   grid-template-rows: auto minmax(0, 1fr);
-  min-height: calc(var(--form-work-height) - 108px);
-  height: calc(var(--form-work-height) - 108px);
+  min-height: calc(var(--form-work-height) - 142px);
+  height: calc(var(--form-work-height) - 142px);
 }
 
 .title-card input:focus,
+.reference-card:focus-within .reference-button,
 textarea:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(18, 216, 195, 0.16);
