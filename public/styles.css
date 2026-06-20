@@ -70,20 +70,20 @@ body.zoomex-mode {
 body.alliance-mode {
   color-scheme: light;
   --ink: #251711;
-  --panel: rgba(255, 252, 247, 0.88);
-  --panel-2: rgba(255, 238, 224, 0.74);
-  --line: rgba(176, 103, 55, 0.2);
+  --panel: rgba(255, 238, 220, 0.82);
+  --panel-2: rgba(247, 204, 168, 0.46);
+  --line: rgba(154, 83, 43, 0.28);
   --line-bright: rgba(247, 87, 30, 0.46);
   --text: #35251e;
-  --muted: #846f61;
+  --muted: #795f50;
   --accent: #f7571e;
   --accent-soft: rgba(247, 87, 30, 0.2);
   --accent-glow: rgba(247, 87, 30, 0.16);
-  --shadow: 0 24px 70px rgba(122, 72, 38, 0.14);
+  --shadow: 0 24px 70px rgba(100, 54, 26, 0.18);
   background:
-    radial-gradient(circle at 82% 12%, rgba(247, 87, 30, 0.12), transparent 32%),
-    radial-gradient(circle at 18% 88%, rgba(214, 192, 45, 0.14), transparent 34%),
-    linear-gradient(180deg, #fffdf8 0%, #fff6ec 52%, #fffaf4 100%);
+    radial-gradient(circle at 80% 14%, rgba(247, 87, 30, 0.2), transparent 32%),
+    radial-gradient(circle at 16% 88%, rgba(214, 192, 45, 0.2), transparent 34%),
+    linear-gradient(180deg, #f7d7b7 0%, #eeb98c 48%, #f5cfad 100%);
   color: var(--text);
 }
 
@@ -131,10 +131,10 @@ body.zoomex-mode::before {
 }
 
 body.alliance-mode::before {
-  opacity: 0.7;
+  opacity: 0.55;
   background:
-    radial-gradient(ellipse 42% 24% at 50% 12%, rgba(255, 209, 151, 0.28), transparent 72%),
-    repeating-linear-gradient(135deg, rgba(247, 87, 30, 0.035) 0 1px, transparent 1px 54px);
+    radial-gradient(ellipse 42% 24% at 50% 12%, rgba(255, 242, 221, 0.28), transparent 72%),
+    repeating-linear-gradient(135deg, rgba(112, 60, 32, 0.045) 0 1px, transparent 1px 54px);
   mix-blend-mode: normal;
 }
 
@@ -381,22 +381,22 @@ body.alliance-mode .studio-logo {
 
 body.alliance-mode .topbar {
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.84), rgba(255, 244, 234, 0.78)),
-    rgba(255, 255, 255, 0.72);
-  border-color: rgba(176, 103, 55, 0.22);
+    linear-gradient(180deg, rgba(255, 238, 220, 0.9), rgba(245, 207, 174, 0.84)),
+    rgba(255, 234, 214, 0.74);
+  border-color: rgba(154, 83, 43, 0.28);
 }
 
 body.alliance-mode .home-back {
   color: rgba(53, 37, 30, 0.78);
-  background: rgba(255, 255, 255, 0.62);
-  border-color: rgba(176, 103, 55, 0.24);
+  background: rgba(255, 246, 235, 0.58);
+  border-color: rgba(154, 83, 43, 0.26);
 }
 
 body.alliance-mode .home-back:hover,
 body.alliance-mode .home-back:focus-visible {
   color: #35251e;
   border-color: rgba(247, 87, 30, 0.58);
-  background: rgba(255, 232, 215, 0.86);
+  background: rgba(255, 226, 204, 0.86);
 }
 
 h1,
@@ -445,9 +445,9 @@ h2 {
 body.alliance-mode .panel,
 body.alliance-mode .result-panel {
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.8), rgba(255, 242, 231, 0.72)),
+    linear-gradient(180deg, rgba(255, 236, 216, 0.76), rgba(244, 203, 171, 0.7)),
     var(--panel);
-  border-color: rgba(176, 103, 55, 0.2);
+  border-color: rgba(154, 83, 43, 0.26);
 }
 
 body.alliance-mode .dropzone span,
@@ -492,8 +492,8 @@ body.alliance-mode .reference-card:hover,
 body.alliance-mode .reference-card:focus-within {
   border-color: rgba(247, 87, 30, 0.55);
   background:
-    linear-gradient(180deg, rgba(255, 246, 238, 0.92), rgba(255, 235, 218, 0.78)),
-    rgba(255, 255, 255, 0.72);
+    linear-gradient(180deg, rgba(255, 230, 211, 0.92), rgba(246, 205, 173, 0.8)),
+    rgba(255, 243, 232, 0.62);
 }
 
 .reference-card input {
@@ -544,9 +544,9 @@ body.alliance-mode .reference-card:focus-within {
 
 body.alliance-mode .dropzone {
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(255, 242, 231, 0.66)),
-    rgba(255, 255, 255, 0.58);
-  border-color: rgba(176, 103, 55, 0.2);
+    linear-gradient(180deg, rgba(255, 232, 211, 0.74), rgba(245, 203, 171, 0.6)),
+    rgba(255, 246, 235, 0.42);
+  border-color: rgba(154, 83, 43, 0.26);
 }
 
 .title-card {
@@ -574,8 +574,8 @@ body.alliance-mode textarea,
 body.alliance-mode .reference-button,
 body.alliance-mode .preview-wrap {
   color: var(--text);
-  background: rgba(255, 255, 255, 0.82);
-  border-color: rgba(176, 103, 55, 0.24);
+  background: rgba(255, 250, 244, 0.72);
+  border-color: rgba(154, 83, 43, 0.3);
 }
 
 body.alliance-mode .title-card input::placeholder,
@@ -672,7 +672,7 @@ textarea:focus {
 
 body.alliance-mode .progress-track {
   border-color: rgba(247, 87, 30, 0.36);
-  background: rgba(255, 255, 255, 0.76);
+  background: rgba(255, 245, 235, 0.62);
   box-shadow:
     inset 0 0 0 1px rgba(214, 192, 45, 0.14),
     0 0 18px rgba(247, 87, 30, 0.08);
@@ -768,9 +768,9 @@ body.alliance-mode .progress-fill {
 
 body.alliance-mode .preview-stage {
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(255, 242, 231, 0.66)),
-    rgba(255, 255, 255, 0.58);
-  border-color: rgba(176, 103, 55, 0.2);
+    linear-gradient(180deg, rgba(255, 232, 211, 0.74), rgba(245, 203, 171, 0.6)),
+    rgba(255, 246, 235, 0.42);
+  border-color: rgba(154, 83, 43, 0.26);
 }
 
 body.alliance-mode .preview-wrap::before {
@@ -856,8 +856,8 @@ body.alliance-mode .primary-btn {
 
 body.alliance-mode .secondary-btn {
   color: #35251e;
-  background: rgba(255, 244, 235, 0.84);
-  border-color: rgba(176, 103, 55, 0.24);
+  background: rgba(255, 232, 211, 0.76);
+  border-color: rgba(154, 83, 43, 0.28);
 }
 
 .error {
