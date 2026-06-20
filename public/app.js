@@ -56,18 +56,6 @@ function formatDuration(totalSeconds) {
   return `${minutes}m ${String(remainder).padStart(2, "0")}s`;
 }
 
-function estimateRemainingText(elapsedSeconds, progress) {
-  if (progress >= 100) return "complete";
-  if (progress < 10) return "estimating time";
-  if (progress < 34) return "about 1-2 min left";
-  if (progress < 82) {
-    if (elapsedSeconds > 150) return "still generating";
-    return "about 45-90s left";
-  }
-  if (progress < 96) return "about 10-20s left";
-  return "almost done";
-}
-
 function displayProgressValue(job) {
   const progress = Math.max(0, Math.min(100, Number(job.progress) || 0));
   const elapsed = job.elapsed_seconds ?? Math.round((Date.now() - progressStartedAt) / 1000);
@@ -98,7 +86,7 @@ function updateProgress(job) {
   } else if (latestProgress.status === "error") {
     progressMeta.textContent = `Stopped after ${formatDuration(elapsed)}`;
   } else {
-    progressMeta.textContent = `Elapsed ${formatDuration(elapsed)} | ${estimateRemainingText(elapsed, roundedProgress)}`;
+    progressMeta.textContent = `Elapsed ${formatDuration(elapsed)}`;
   }
 }
 
