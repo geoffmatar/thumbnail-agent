@@ -43,6 +43,8 @@ PUBLIC_ASSET_PATHS = {
     "/alliance-latin-card-logo.png",
     "/alliance-black-logo.png",
     "/alliance-black-card-logo.png",
+    "/alliance-lgbtq-logo.png",
+    "/alliance-lgbtq-card-logo.png",
     "/leverage-logo.png",
     "/leverage-card-logo.png",
     "/abh-logo.png",
