@@ -343,17 +343,17 @@ def draw_title(canvas, title):
     top_font = fit_font(top_text, TOP_BAND["w"] - 88, TOP_BAND["h"] * 0.72, 84, 38)
     draw_centered_text(draw, TOP_BAND, top_text, top_font, "#12d8c3")
 
+    draw.rounded_rectangle(
+        (
+            BOTTOM_BAND["x"],
+            BOTTOM_BAND["y"],
+            BOTTOM_BAND["x"] + BOTTOM_BAND["w"],
+            BOTTOM_BAND["y"] + BOTTOM_BAND["h"],
+        ),
+        radius=BOTTOM_BAND["radius"],
+        fill=(18, 216, 195, 255),
+    )
     if bottom_text:
-        draw.rounded_rectangle(
-            (
-                BOTTOM_BAND["x"],
-                BOTTOM_BAND["y"],
-                BOTTOM_BAND["x"] + BOTTOM_BAND["w"],
-                BOTTOM_BAND["y"] + BOTTOM_BAND["h"],
-            ),
-            radius=BOTTOM_BAND["radius"],
-            fill=(18, 216, 195, 255),
-        )
         bottom_font = fit_font(bottom_text, BOTTOM_BAND["w"] - 88, BOTTOM_BAND["h"] * 0.72, 92, 38)
         draw_centered_text(draw, BOTTOM_BAND, bottom_text, bottom_font, "#030303")
     return canvas
