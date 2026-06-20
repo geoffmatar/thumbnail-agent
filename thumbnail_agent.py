@@ -35,6 +35,15 @@ WORK_DIR = APP_DIR / "work"
 DESIGN_PATH = ASSETS_DIR / "zoomex-design.png"
 TITLE_FONT_PATH = ASSETS_DIR / "Blinker-Bold.ttf"
 OPENAI_ENDPOINT = "https://api.openai.com/v1/responses"
+PUBLIC_ASSET_PATHS = {
+    "/styles.css",
+    "/app.js",
+    "/1000media-logo.png",
+    "/zoomex-logo.png",
+    "/leverage-logo.png",
+    "/abh-logo.png",
+    "/interfaith-logo.png",
+}
 CANVAS_SIZE = (1080, 1920)
 
 TOP_BAND = {"x": 160, "y": 1243, "w": 760, "h": 116, "radius": 62}
@@ -663,7 +672,7 @@ class ThumbnailHandler(BaseHTTPRequestHandler):
             return self.send_json({"ok": True}, include_body=False)
         if path.startswith("/generated/"):
             return self.send_file(GENERATED_DIR / path.removeprefix("/generated/"), include_body=False)
-        if path in ["/styles.css", "/app.js", "/zoomex-logo.png", "/1000media-logo.png"]:
+        if path in PUBLIC_ASSET_PATHS:
             return self.send_file(PUBLIC_DIR / path.lstrip("/"), include_body=False)
         self.send_error(404)
 
@@ -694,7 +703,7 @@ class ThumbnailHandler(BaseHTTPRequestHandler):
             return self.send_json(job)
         if path.startswith("/generated/"):
             return self.send_file(GENERATED_DIR / path.removeprefix("/generated/"))
-        if path in ["/styles.css", "/app.js", "/zoomex-logo.png", "/1000media-logo.png"]:
+        if path in PUBLIC_ASSET_PATHS:
             return self.send_file(PUBLIC_DIR / path.lstrip("/"))
         self.send_error(404)
 
