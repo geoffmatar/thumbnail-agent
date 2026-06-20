@@ -54,6 +54,9 @@ def focus_zone_prompt():
         f"from x={x1} to {x2}, y={y1} to {y2} on a 1080x1920 canvas. "
         "This square is between the ZOOMEX logo and the title bars. "
         "Faces, eyes, heads, products, vehicles, or the most important action must be centered in that square. "
+        "MANDATORY HUMAN RULE: if any human appears, the face, eyes, head, shoulders, and upper half-body must be centered "
+        "inside this focus square, below the ZOOMEX logo area. Faces must never sit above the logo height, near the top edge, "
+        "or behind the logo. Use a centered half-body portrait composition for people whenever possible. "
         "The subject may extend beyond the square, but no important face or key object should be hidden by the top-left logo "
         "or by the title bars at the bottom."
     )
@@ -212,6 +215,7 @@ def create_visual_brief(script_text, title):
                 "content": (
                     "You create visual concepts for vertical social thumbnails. "
                     "The title is supplied by the user and will be rendered later in fixed ZOOMEX title bars. "
+                    "Human composition is strict: faces and upper half-bodies must be centered below the ZOOMEX logo area, never above it. "
                     "Return only JSON matching the schema. Never include text, captions, or logos in the image prompt."
                 ),
             },
@@ -251,6 +255,8 @@ def generate_subject_image(brief):
         "Hard requirements: vertical 9:16, full-bleed image, no text, no readable letters, no logos, no watermarks. "
         "The scene must fill the entire canvas from top to bottom. Do not make a mostly black image. "
         "Do not leave giant blank areas for text. Use real environment, texture, action, and depth behind the whole frame. "
+        "If humans are present, the main face and upper half-body must be centered below the ZOOMEX logo area; "
+        "do not place any face above the logo height or near the top of the frame. "
         f"{focus_zone_prompt()} "
         "Keep the area behind the title bars lower contrast but still visually present."
     )
