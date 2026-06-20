@@ -6,11 +6,43 @@
     <title>Thumbnail Agent</title>
     <link rel="stylesheet" href="/styles.css">
   </head>
-  <body>
-    <main class="app-shell">
+  <body class="home-mode">
+    <main id="homeView" class="home-shell">
+      <nav class="home-nav" aria-label="1000media thumbnails">
+        <div class="media-logo" aria-label="1000media">
+          <span class="media-number">1000</span>
+          <span class="media-word">media</span>
+        </div>
+        <span class="home-pill">Internal thumbnail tools</span>
+      </nav>
+
+      <section class="home-hero">
+        <div class="home-copy">
+          <p class="home-kicker">Project workspace</p>
+          <h1 class="home-title">1000media Thumbnails</h1>
+          <p class="home-subtitle">Choose a brand workspace and build the next thumbnail from its locked design system.</p>
+        </div>
+
+        <div class="project-grid" aria-label="Thumbnail projects">
+          <button id="openZoomex" class="project-tile" type="button">
+            <span class="project-logo-wrap">
+              <img class="project-logo" src="/zoomex-logo.png" alt="ZOOMEX">
+            </span>
+            <span class="project-copy">
+              <span class="project-name">Zoomex</span>
+              <span class="project-role">Thumbnail agent</span>
+            </span>
+            <span class="project-action">Open</span>
+          </button>
+        </div>
+      </section>
+    </main>
+
+    <main id="zoomexView" class="app-shell" hidden>
       <section class="workspace">
         <header class="topbar">
           <div class="brand-lockup">
+            <button id="backHome" class="home-back" type="button">1000media</button>
             <img class="zoomex-logo" src="/zoomex-logo.png" alt="ZOOMEX">
             <div class="brand-meta">
               <h1>Thumbnail agent</h1>

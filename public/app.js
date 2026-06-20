@@ -1,3 +1,7 @@
+const homeView = document.querySelector("#homeView");
+const zoomexView = document.querySelector("#zoomexView");
+const openZoomex = document.querySelector("#openZoomex");
+const backHome = document.querySelector("#backHome");
 const createBtn = document.querySelector("#createBtn");
 const statusLine = document.querySelector("#statusLine");
 const titleInput = document.querySelector("#titleInput");
@@ -13,6 +17,25 @@ const progressMeta = document.querySelector("#progressMeta");
 let progressStartedAt = 0;
 let progressTimer = null;
 let latestProgress = null;
+
+function showView(view, updateUrl = false) {
+  const isZoomex = view === "zoomex";
+  homeView.hidden = isZoomex;
+  zoomexView.hidden = !isZoomex;
+  document.body.classList.toggle("home-mode", !isZoomex);
+  document.body.classList.toggle("zoomex-mode", isZoomex);
+
+  if (!updateUrl) return;
+  if (isZoomex) {
+    window.location.hash = "zoomex";
+  } else {
+    window.history.pushState("", document.title, window.location.pathname + window.location.search);
+  }
+}
+
+function syncViewFromUrl() {
+  showView(window.location.hash === "#zoomex" ? "zoomex" : "home");
+}
 
 async function readJson(url) {
   const response = await fetch(url);
@@ -179,5 +202,10 @@ async function createThumbnail() {
   }
 }
 
+openZoomex.addEventListener("click", () => showView("zoomex", true));
+backHome.addEventListener("click", () => showView("home", true));
+window.addEventListener("hashchange", syncViewFromUrl);
+
+syncViewFromUrl();
 createBtn.addEventListener("click", createThumbnail);
 loadStatus();
