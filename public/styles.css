@@ -49,9 +49,9 @@ body {
 body.home-mode {
   color-scheme: light;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(247, 247, 252, 0.98)),
-    repeating-linear-gradient(90deg, rgba(104, 70, 225, 0.045) 0 1px, transparent 1px 88px);
+    linear-gradient(180deg, #ffffff 0%, #ffffff 44%, #fbfbff 100%);
   color: #31283d;
+  overflow-x: hidden;
 }
 
 body.zoomex-mode {
@@ -71,10 +71,31 @@ body::before {
 }
 
 body.home-mode::before {
-  opacity: 0.9;
+  opacity: 0.92;
   background:
-    linear-gradient(135deg, transparent 0 32%, rgba(102, 71, 229, 0.08) 32% 33%, transparent 33% 100%),
-    linear-gradient(24deg, transparent 0 58%, rgba(17, 205, 193, 0.08) 58% 59%, transparent 59% 100%);
+    radial-gradient(ellipse 46% 26% at 50% 27%, rgba(224, 252, 252, 0.76), rgba(224, 252, 252, 0.36) 38%, transparent 72%),
+    radial-gradient(ellipse 52% 30% at 58% 28%, rgba(186, 200, 255, 0.4), transparent 68%),
+    radial-gradient(ellipse 48% 28% at 38% 32%, rgba(179, 229, 255, 0.36), transparent 70%),
+    radial-gradient(ellipse 46% 24% at 62% 39%, rgba(249, 207, 236, 0.24), transparent 72%);
+  filter: blur(18px);
+  transform: translateY(-18px) scale(1.06);
+}
+
+body.home-mode::after {
+  content: "";
+  position: fixed;
+  top: 70px;
+  left: 50%;
+  width: min(920px, 68vw);
+  height: min(420px, 32vw);
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 50% 104%, transparent 0 55%, rgba(140, 166, 255, 0.22) 57%, rgba(210, 239, 255, 0.16) 60%, transparent 66%),
+    radial-gradient(ellipse at 50% 100%, transparent 0 62%, rgba(255, 219, 245, 0.2) 65%, transparent 70%);
+  border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+  filter: blur(12px);
+  opacity: 0.82;
+  transform: translateX(-50%);
 }
 
 body.zoomex-mode::before {
