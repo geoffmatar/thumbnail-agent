@@ -115,15 +115,6 @@ h1 {
 
 .brand-meta {
   display: grid;
-  gap: 5px;
-}
-
-.brand-subline {
-  color: rgba(223, 250, 245, 0.64);
-  font-size: 12px;
-  line-height: 1.2;
-  font-weight: 450;
-  letter-spacing: 0.02em;
 }
 
 h2 {
