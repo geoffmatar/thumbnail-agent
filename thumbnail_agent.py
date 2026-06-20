@@ -604,7 +604,7 @@ class ThumbnailHandler(BaseHTTPRequestHandler):
             return self.send_json({"ok": True}, include_body=False)
         if path.startswith("/generated/"):
             return self.send_file(GENERATED_DIR / path.removeprefix("/generated/"), include_body=False)
-        if path in ["/styles.css", "/app.js", "/zoomex-logo.png"]:
+        if path in ["/styles.css", "/app.js", "/zoomex-logo.png", "/1000media-logo.png"]:
             return self.send_file(PUBLIC_DIR / path.lstrip("/"), include_body=False)
         self.send_error(404)
 
@@ -635,7 +635,7 @@ class ThumbnailHandler(BaseHTTPRequestHandler):
             return self.send_json(job)
         if path.startswith("/generated/"):
             return self.send_file(GENERATED_DIR / path.removeprefix("/generated/"))
-        if path in ["/styles.css", "/app.js", "/zoomex-logo.png"]:
+        if path in ["/styles.css", "/app.js", "/zoomex-logo.png", "/1000media-logo.png"]:
             return self.send_file(PUBLIC_DIR / path.lstrip("/"))
         self.send_error(404)
 
