@@ -147,6 +147,31 @@ function stopProgress() {
   progressTimer = null;
 }
 
+async function downloadThumbnail(event) {
+  if (downloadLink.hidden || !downloadLink.href || downloadLink.href.endsWith("#")) return;
+  event.preventDefault();
+
+  try {
+    const response = await fetch(downloadLink.href);
+    const contentType = response.headers.get("Content-Type") || "";
+    if (!response.ok || !contentType.startsWith("image/")) {
+      throw new Error("Download failed. Please create the thumbnail again.");
+    }
+
+    const blob = await response.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const temporaryLink = document.createElement("a");
+    temporaryLink.href = objectUrl;
+    temporaryLink.download = downloadLink.download || "thumbnail.png";
+    document.body.appendChild(temporaryLink);
+    temporaryLink.click();
+    temporaryLink.remove();
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
 function setStatus(message, isError = false) {
   statusLine.textContent = message;
   statusLine.classList.toggle("error", isError);
@@ -223,7 +248,8 @@ async function createThumbnail() {
 
     preview.src = `${result.thumbnail_url}?v=${Date.now()}`;
     preview.style.display = "block";
-    downloadLink.href = result.thumbnail_url;
+    downloadLink.href = result.download_url || result.thumbnail_url;
+    downloadLink.download = result.filename || "thumbnail.png";
     downloadLink.hidden = false;
     setStatus(result.used_ai ? "Done. Saved as a new thumbnail." : "Done with local fallback.");
   } catch (error) {
@@ -245,6 +271,7 @@ openAlliance.addEventListener("click", () => showView("alliance-latin", true));
 backHome.addEventListener("click", () => showView("home", true));
 window.addEventListener("hashchange", syncViewFromUrl);
 personReference.addEventListener("change", updateReferenceFileName);
+downloadLink.addEventListener("click", downloadThumbnail);
 
 syncViewFromUrl();
 createBtn.addEventListener("click", createThumbnail);

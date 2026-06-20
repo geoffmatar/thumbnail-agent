@@ -204,6 +204,10 @@ def save_json(path, value):
     path.write_text(json.dumps(value, indent=2), encoding="utf-8")
 
 
+def generated_file_path(filename):
+    return GENERATED_DIR / Path(filename).name
+
+
 def openai_responses_create(payload, timeout=240):
     api_key = openai_key()
     if not api_key:
@@ -627,6 +631,8 @@ def run_create_job(job_id, script_text, title, person_reference_path=None, clien
             "client_name": meta["client_name"],
             "visual_prompt": meta["visual_prompt"],
             "thumbnail_url": f"/generated/{thumbnail_name}",
+            "download_url": f"/api/download/{thumbnail_name}",
+            "filename": thumbnail_name,
             "used_ai": meta["used_ai"],
             "person_reference_used": meta.get("person_reference_used", False),
         }
@@ -722,7 +728,7 @@ class ThumbnailHandler(BaseHTTPRequestHandler):
         if include_body:
             self.wfile.write(body)
 
-    def send_file(self, path, include_body=True):
+    def send_file(self, path, include_body=True, attachment_name=None):
         path = Path(path)
         if not path.exists() or not path.is_file():
             self.send_error(404)
@@ -730,6 +736,9 @@ class ThumbnailHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", mimetypes.guess_type(str(path))[0] or "application/octet-stream")
         self.send_header("Content-Length", str(path.stat().st_size))
+        if attachment_name:
+            safe_name = Path(attachment_name).name
+            self.send_header("Content-Disposition", f'attachment; filename="{safe_name}"')
         self.end_headers()
         if include_body:
             self.wfile.write(path.read_bytes())
@@ -746,8 +755,11 @@ class ThumbnailHandler(BaseHTTPRequestHandler):
             return self.send_json({"ok": True}, include_body=False)
         if path.startswith("/api/jobs/"):
             return self.send_json({"ok": True}, include_body=False)
+        if path.startswith("/api/download/"):
+            filename = path.removeprefix("/api/download/").strip("/")
+            return self.send_file(generated_file_path(filename), include_body=False, attachment_name=filename)
         if path.startswith("/generated/"):
-            return self.send_file(GENERATED_DIR / path.removeprefix("/generated/"), include_body=False)
+            return self.send_file(generated_file_path(path.removeprefix("/generated/")), include_body=False)
         if path in PUBLIC_ASSET_PATHS:
             return self.send_file(PUBLIC_DIR / path.lstrip("/"), include_body=False)
         self.send_error(404)
@@ -785,8 +797,11 @@ class ThumbnailHandler(BaseHTTPRequestHandler):
             if not job:
                 return self.send_json({"error": "Job not found."}, 404)
             return self.send_json(job)
+        if path.startswith("/api/download/"):
+            filename = path.removeprefix("/api/download/").strip("/")
+            return self.send_file(generated_file_path(filename), attachment_name=filename)
         if path.startswith("/generated/"):
-            return self.send_file(GENERATED_DIR / path.removeprefix("/generated/"))
+            return self.send_file(generated_file_path(path.removeprefix("/generated/")))
         if path in PUBLIC_ASSET_PATHS:
             return self.send_file(PUBLIC_DIR / path.lstrip("/"))
         self.send_error(404)
