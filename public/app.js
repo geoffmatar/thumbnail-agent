@@ -1,14 +1,18 @@
 const homeView = document.querySelector("#homeView");
 const zoomexView = document.querySelector("#zoomexView");
 const openZoomex = document.querySelector("#openZoomex");
+const openAlliance = document.querySelector("#openAlliance");
 const backHome = document.querySelector("#backHome");
 const createBtn = document.querySelector("#createBtn");
 const statusLine = document.querySelector("#statusLine");
+const studioLogo = document.querySelector("#studioLogo");
+const studioTitle = document.querySelector("#studioTitle");
 const titleInput = document.querySelector("#titleInput");
 const scriptText = document.querySelector("#scriptText");
 const personReference = document.querySelector("#personReference");
 const referenceFileName = document.querySelector("#referenceFileName");
 const preview = document.querySelector("#preview");
+const previewWrap = document.querySelector("#previewWrap");
 const downloadLink = document.querySelector("#downloadLink");
 const progressPanel = document.querySelector("#progressPanel");
 const progressLabel = document.querySelector("#progressLabel");
@@ -19,24 +23,57 @@ const progressMeta = document.querySelector("#progressMeta");
 let progressStartedAt = 0;
 let progressTimer = null;
 let latestProgress = null;
+let currentClient = "zoomex";
+
+const clients = {
+  zoomex: {
+    slug: "zoomex",
+    bodyClass: "zoomex-mode",
+    logo: "/zoomex-logo.png",
+    alt: "ZOOMEX",
+    title: "Thumbnail agent",
+    placeholder: "ZOOMEX",
+  },
+  "alliance-latin": {
+    slug: "alliance-latin",
+    bodyClass: "alliance-mode",
+    logo: "/alliance-latin-logo.png",
+    alt: "Alliance Latin Community",
+    title: "Thumbnail agent",
+    placeholder: "ALLIANCE",
+  },
+};
 
 function showView(view, updateUrl = false) {
-  const isZoomex = view === "zoomex";
-  homeView.hidden = isZoomex;
-  zoomexView.hidden = !isZoomex;
-  document.body.classList.toggle("home-mode", !isZoomex);
-  document.body.classList.toggle("zoomex-mode", isZoomex);
+  const client = clients[view];
+  const isStudio = Boolean(client);
+  homeView.hidden = isStudio;
+  zoomexView.hidden = !isStudio;
+  document.body.classList.toggle("home-mode", !isStudio);
+  Object.values(clients).forEach((item) => {
+    document.body.classList.toggle(item.bodyClass, isStudio && item.slug === client?.slug);
+  });
+
+  if (isStudio) {
+    currentClient = client.slug;
+    studioLogo.src = client.logo;
+    studioLogo.alt = client.alt;
+    studioTitle.textContent = client.title;
+    previewWrap.dataset.placeholder = client.placeholder;
+    loadStatus();
+  }
 
   if (!updateUrl) return;
-  if (isZoomex) {
-    window.location.hash = "zoomex";
+  if (isStudio) {
+    window.location.hash = client.slug;
   } else {
     window.history.pushState("", document.title, window.location.pathname + window.location.search);
   }
 }
 
 function syncViewFromUrl() {
-  showView(window.location.hash === "#zoomex" ? "zoomex" : "home");
+  const slug = window.location.hash.replace("#", "");
+  showView(clients[slug] ? slug : "home");
 }
 
 async function readJson(url) {
@@ -124,9 +161,9 @@ function updateReferenceFileName() {
 
 async function loadStatus() {
   try {
-    const status = await readJson("/api/status");
-    const designText = status.design_ready ? "ZOOMEX design ready" : "design missing";
-    const fontText = status.font_ready ? "Blinker ready" : "font missing";
+    const status = await readJson(`/api/status?client=${encodeURIComponent(currentClient)}`);
+    const designText = status.design_ready ? status.client.design_label : "design missing";
+    const fontText = status.font_ready ? status.client.font_label : "font missing";
     setStatus(`${designText} | ${fontText} | ready to create`);
     if (!status.openai_configured) {
       setStatus("Server OpenAI key missing. Ask the app admin to set OPENAI_API_KEY.", true);
@@ -164,6 +201,7 @@ async function createThumbnail() {
   }
 
   const form = new FormData();
+  form.append("client", currentClient);
   form.append("title", title);
   form.append("script", script);
   if (personReference.files && personReference.files[0]) {
@@ -203,6 +241,7 @@ async function createThumbnail() {
 }
 
 openZoomex.addEventListener("click", () => showView("zoomex", true));
+openAlliance.addEventListener("click", () => showView("alliance-latin", true));
 backHome.addEventListener("click", () => showView("home", true));
 window.addEventListener("hashchange", syncViewFromUrl);
 personReference.addEventListener("change", updateReferenceFileName);

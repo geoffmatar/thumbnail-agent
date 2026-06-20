@@ -32,8 +32,6 @@ STATE_DIR = APP_DIR / "state"
 GENERATED_DIR = APP_DIR / "generated"
 WORK_DIR = APP_DIR / "work"
 
-DESIGN_PATH = ASSETS_DIR / "zoomex-design.png"
-TITLE_FONT_PATH = ASSETS_DIR / "Blinker-Bold.ttf"
 OPENAI_ENDPOINT = "https://api.openai.com/v1/responses"
 PUBLIC_ASSET_PATHS = {
     "/styles.css",
@@ -58,13 +56,69 @@ CANVAS_SIZE = (1080, 1920)
 
 TOP_BAND = {"x": 160, "y": 1243, "w": 760, "h": 116, "radius": 62}
 BOTTOM_BAND = {"x": 160, "y": 1366, "w": 760, "h": 126, "radius": 64}
+ZOOMEX_DESIGN_PATH = ASSETS_DIR / "zoomex-design.png"
+ZOOMEX_FONT_PATH = ASSETS_DIR / "Blinker-Bold.ttf"
+ALLIANCE_DESIGN_PATH = ASSETS_DIR / "alliance-latin-design.png"
+ALLIANCE_FONT_PATH = ASSETS_DIR / "Poppins-Bold.ttf"
 FOCUS_ZONE = {"x": 210, "y": 560, "w": 660, "h": 660}
+CLIENTS = {
+    "zoomex": {
+        "slug": "zoomex",
+        "display_name": "Zoomex",
+        "prompt_name": "ZOOMEX",
+        "design_path": ZOOMEX_DESIGN_PATH,
+        "font_path": ZOOMEX_FONT_PATH,
+        "font_label": "Blinker ready",
+        "design_label": "ZOOMEX design ready",
+        "logo_area": "top-left ZOOMEX logo area",
+        "template_context": "fixed transparent ZOOMEX design layer",
+        "title_bands": [
+            {**TOP_BAND, "fill": (0, 0, 0, 245), "text_fill": "#12d8c3", "font_max": 84, "font_min": 38},
+            {**BOTTOM_BAND, "fill": (18, 216, 195, 255), "text_fill": "#030303", "font_max": 92, "font_min": 38},
+        ],
+    },
+    "alliance-latin": {
+        "slug": "alliance-latin",
+        "display_name": "Alliance Latin",
+        "prompt_name": "Alliance Latin Community",
+        "design_path": ALLIANCE_DESIGN_PATH,
+        "font_path": ALLIANCE_FONT_PATH,
+        "font_label": "Poppins ready",
+        "design_label": "Alliance design ready",
+        "logo_area": "top-center Alliance Latin Community logo area",
+        "template_context": "fixed Alliance Latin Community design layer with blue and orange title bars",
+        "title_bands": [
+            {"x": 38, "y": 1256, "w": 1042, "h": 108, "radius": 58, "fill": (0, 124, 190, 255), "text_fill": "#ffffff", "font_max": 74, "font_min": 34},
+            {"x": -10, "y": 1376, "w": 1052, "h": 108, "radius": 58, "fill": (247, 87, 30, 255), "text_fill": "#ffffff", "font_max": 74, "font_min": 34},
+        ],
+    },
+}
+DEFAULT_CLIENT = "zoomex"
 JOB_TTL_SECONDS = 60 * 60 * 3
 JOBS = {}
 JOBS_LOCK = threading.Lock()
 
 
-def focus_zone_prompt():
+def get_client_config(client_slug):
+    slug = (client_slug or DEFAULT_CLIENT).strip().lower()
+    if slug not in CLIENTS:
+        raise RuntimeError(f"Unknown thumbnail client: {client_slug}")
+    return CLIENTS[slug]
+
+
+def public_client_status(config):
+    return {
+        "slug": config["slug"],
+        "display_name": config["display_name"],
+        "design_ready": config["design_path"].exists(),
+        "font_ready": config["font_path"].exists(),
+        "design_label": config["design_label"],
+        "font_label": config["font_label"],
+    }
+
+
+def focus_zone_prompt(config=None):
+    config = config or get_client_config(DEFAULT_CLIENT)
     x1 = FOCUS_ZONE["x"]
     y1 = FOCUS_ZONE["y"]
     x2 = FOCUS_ZONE["x"] + FOCUS_ZONE["w"]
@@ -72,12 +126,12 @@ def focus_zone_prompt():
     return (
         f"Composition: place the important subject details inside the central focus square "
         f"from x={x1} to {x2}, y={y1} to {y2} on a 1080x1920 canvas. "
-        "This square is between the ZOOMEX logo and the title bars. "
+        f"This square is between the {config['prompt_name']} logo area and the title bars. "
         "Faces, eyes, heads, products, vehicles, or the most important action must be centered in that square. "
         "MANDATORY HUMAN RULE: if any human appears, the face, eyes, head, shoulders, and upper half-body must be centered "
-        "inside this focus square, below the ZOOMEX logo area. Faces must never sit above the logo height, near the top edge, "
+        f"inside this focus square, below the {config['prompt_name']} logo area. Faces must never sit above the logo height, near the top edge, "
         "or behind the logo. Use a centered half-body portrait composition for people whenever possible. "
-        "The subject may extend beyond the square, but no important face or key object should be hidden by the top-left logo "
+        f"The subject may extend beyond the square, but no important face or key object should be hidden by the {config['logo_area']} "
         "or by the title bars at the bottom."
     )
 
@@ -201,7 +255,7 @@ def visual_brief_schema():
         "properties": {
             "visual_prompt": {
                 "type": "string",
-                "description": "Prompt for the full-frame image behind the fixed ZOOMEX design. No text/logos.",
+                "description": "Prompt for the full-frame image behind the fixed client design. No text/logos.",
             },
             "negative_prompt": {
                 "type": "string",
@@ -215,7 +269,7 @@ def visual_brief_schema():
     }
 
 
-def create_visual_brief(script_text, title, has_person_reference=False):
+def create_visual_brief(script_text, title, config, has_person_reference=False):
     reference_note = ""
     if has_person_reference:
         reference_note = (
@@ -228,7 +282,7 @@ def create_visual_brief(script_text, title, has_person_reference=False):
             "visual_prompt": (
                 "Create a vertical 9:16 full-frame editorial thumbnail image based on the script. "
                 f"{reference_note}"
-                f"No text, no captions, no logos, no black empty poster space. {focus_zone_prompt()}"
+                f"No text, no captions, no logos, no black empty poster space. {focus_zone_prompt(config)}"
             ),
             "negative_prompt": "text, captions, watermarks, logos, blank black background, empty poster space",
             "rationale": "Local fallback brief because OPENAI_API_KEY is not set.",
@@ -242,8 +296,8 @@ def create_visual_brief(script_text, title, has_person_reference=False):
                 "role": "developer",
                 "content": (
                     "You create visual concepts for vertical social thumbnails. "
-                    "The title is supplied by the user and will be rendered later in fixed ZOOMEX title bars. "
-                    "Human composition is strict: faces and upper half-bodies must be centered below the ZOOMEX logo area, never above it. "
+                    f"The title is supplied by the user and will be rendered later in fixed {config['prompt_name']} title bars. "
+                    f"Human composition is strict: faces and upper half-bodies must be centered below the {config['prompt_name']} logo area, never above it. "
                     "Return only JSON matching the schema. Never include text, captions, or logos in the image prompt."
                 ),
             },
@@ -255,10 +309,10 @@ def create_visual_brief(script_text, title, has_person_reference=False):
                         "text": (
                             f"TITLE: {title}\n\n"
                             "Create only the subject/background image prompt for this script. "
-                            "The final image must be full-frame 9:16 and fill the whole thumbnail behind a fixed transparent ZOOMEX design layer. "
+                            f"The final image must be full-frame 9:16 and fill the whole thumbnail behind a {config['template_context']}. "
                             "Avoid black voids, blank poster space, title-card layouts, or large empty areas. "
                             f"{reference_note}"
-                            f"{focus_zone_prompt()} "
+                            f"{focus_zone_prompt(config)} "
                             "Keep the lower title area visually calmer but still image-filled.\n\n"
                             f"SCRIPT:\n{script_text[:14000]}"
                         ),
@@ -278,15 +332,15 @@ def create_visual_brief(script_text, title, has_person_reference=False):
     return json.loads(extract_response_text(openai_responses_create(payload)))
 
 
-def generate_subject_image(brief, person_reference_path=None):
+def generate_subject_image(brief, config, person_reference_path=None):
     prompt = (
         f"{brief['visual_prompt']}\n\n"
         "Hard requirements: vertical 9:16, full-bleed image, no text, no readable letters, no logos, no watermarks. "
         "The scene must fill the entire canvas from top to bottom. Do not make a mostly black image. "
         "Do not leave giant blank areas for text. Use real environment, texture, action, and depth behind the whole frame. "
-        "If humans are present, the main face and upper half-body must be centered below the ZOOMEX logo area; "
+        f"If humans are present, the main face and upper half-body must be centered below the {config['prompt_name']} logo area; "
         "do not place any face above the logo height or near the top of the frame. "
-        f"{focus_zone_prompt()} "
+        f"{focus_zone_prompt(config)} "
         "Keep the area behind the title bars lower contrast but still visually present."
     )
     content = [{"type": "input_text", "text": prompt}]
@@ -308,9 +362,10 @@ def generate_subject_image(brief, person_reference_path=None):
     return image_path
 
 
-def resolve_font(size):
+def resolve_font(size, config=None):
+    config = config or get_client_config(DEFAULT_CLIENT)
     candidates = [
-        TITLE_FONT_PATH,
+        config["font_path"],
         "/System/Library/Fonts/Supplemental/Arial Black.ttf",
         "/System/Library/Fonts/Supplemental/Impact.ttf",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
@@ -342,15 +397,15 @@ def split_title(title):
     return " ".join(words[:split_at]), " ".join(words[split_at:])
 
 
-def fit_font(text, max_width, max_height, max_size, min_size):
+def fit_font(text, max_width, max_height, max_size, min_size, config=None):
     probe = Image.new("RGBA", (10, 10), (0, 0, 0, 0))
     draw = ImageDraw.Draw(probe)
     for size in range(max_size, min_size - 1, -2):
-        font = resolve_font(size)
+        font = resolve_font(size, config)
         width, height = text_size(draw, text, font)
         if width <= max_width and height <= max_height:
             return font
-    return resolve_font(min_size)
+    return resolve_font(min_size, config)
 
 
 def draw_centered_text(draw, box, text, font, fill):
@@ -374,43 +429,43 @@ def adjust_subject(image):
     return image.convert("RGBA")
 
 
-def draw_title(canvas, title):
+def draw_title(canvas, title, config):
     top_text, bottom_text = split_title(title)
+    title_lines = [top_text, bottom_text]
     draw = ImageDraw.Draw(canvas)
 
-    draw.rounded_rectangle(
-        (TOP_BAND["x"], TOP_BAND["y"], TOP_BAND["x"] + TOP_BAND["w"], TOP_BAND["y"] + TOP_BAND["h"]),
-        radius=TOP_BAND["radius"],
-        fill=(0, 0, 0, 245),
-    )
-    top_font = fit_font(top_text, TOP_BAND["w"] - 88, TOP_BAND["h"] * 0.72, 84, 38)
-    draw_centered_text(draw, TOP_BAND, top_text, top_font, "#12d8c3")
-
-    draw.rounded_rectangle(
-        (
-            BOTTOM_BAND["x"],
-            BOTTOM_BAND["y"],
-            BOTTOM_BAND["x"] + BOTTOM_BAND["w"],
-            BOTTOM_BAND["y"] + BOTTOM_BAND["h"],
-        ),
-        radius=BOTTOM_BAND["radius"],
-        fill=(18, 216, 195, 255),
-    )
-    if bottom_text:
-        bottom_font = fit_font(bottom_text, BOTTOM_BAND["w"] - 88, BOTTOM_BAND["h"] * 0.72, 92, 38)
-        draw_centered_text(draw, BOTTOM_BAND, bottom_text, bottom_font, "#030303")
+    for index, band in enumerate(config["title_bands"]):
+        draw.rounded_rectangle(
+            (band["x"], band["y"], band["x"] + band["w"], band["y"] + band["h"]),
+            radius=band["radius"],
+            fill=band["fill"],
+        )
+        text = title_lines[index] if index < len(title_lines) else ""
+        if text:
+            font = fit_font(
+                text,
+                band["w"] - 88,
+                band["h"] * 0.72,
+                band.get("font_max", 88),
+                band.get("font_min", 38),
+                config,
+            )
+            draw_centered_text(draw, band, text, font, band["text_fill"])
     return canvas
 
 
-def render_thumbnail(title, subject_image_path, output_path):
-    if not DESIGN_PATH.exists():
-        raise RuntimeError(f"Missing fixed design asset: {DESIGN_PATH}")
-    if not TITLE_FONT_PATH.exists():
-        raise RuntimeError(f"Missing title font asset: {TITLE_FONT_PATH}")
+def render_thumbnail(title, subject_image_path, output_path, config=None):
+    config = config or get_client_config(DEFAULT_CLIENT)
+    design_path = config["design_path"]
+    font_path = config["font_path"]
+    if not design_path.exists():
+        raise RuntimeError(f"Missing fixed design asset: {design_path}")
+    if not font_path.exists():
+        raise RuntimeError(f"Missing title font asset: {font_path}")
     subject = adjust_subject(fit_cover(Image.open(subject_image_path), CANVAS_SIZE))
-    design = Image.open(DESIGN_PATH).convert("RGBA").resize(CANVAS_SIZE, Image.Resampling.LANCZOS)
+    design = Image.open(design_path).convert("RGBA").resize(CANVAS_SIZE, Image.Resampling.LANCZOS)
     canvas = Image.alpha_composite(subject, design)
-    canvas = draw_title(canvas, title)
+    canvas = draw_title(canvas, title, config)
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     canvas.convert("RGB").save(output_path, "PNG", optimize=True)
@@ -447,8 +502,9 @@ def image_data_url(path):
     return f"data:image/jpeg;base64,{encoded}"
 
 
-def handle_create(script_text, title, subject_path=None, person_reference_path=None, progress_callback=None):
+def handle_create(script_text, title, subject_path=None, person_reference_path=None, progress_callback=None, client_slug=DEFAULT_CLIENT):
     ensure_dirs()
+    config = get_client_config(client_slug)
     title = title.strip()
     if not title:
         raise RuntimeError("Add the thumbnail title first.")
@@ -457,7 +513,7 @@ def handle_create(script_text, title, subject_path=None, person_reference_path=N
 
     if progress_callback:
         progress_callback(12, "Reading the script and building the visual brief...")
-    brief = create_visual_brief(script_text, title, has_person_reference=bool(person_reference_path))
+    brief = create_visual_brief(script_text, title, config, has_person_reference=bool(person_reference_path))
     if progress_callback:
         message = "Visual direction ready. Generating the subject image..."
         if person_reference_path:
@@ -469,7 +525,7 @@ def handle_create(script_text, title, subject_path=None, person_reference_path=N
             subject_path = person_reference_path
         else:
             try:
-                subject_path = generate_subject_image(brief, person_reference_path=person_reference_path)
+                subject_path = generate_subject_image(brief, config, person_reference_path=person_reference_path)
             except Exception as error:
                 if not person_reference_path:
                     raise
@@ -480,10 +536,10 @@ def handle_create(script_text, title, subject_path=None, person_reference_path=N
                 ).strip()
 
     if progress_callback:
-        progress_callback(82, "Image generated. Applying the ZOOMEX template and title...")
+        progress_callback(82, f"Image generated. Applying the {config['display_name']} template and title...")
     timestamp = time.strftime("%Y%m%d-%H%M%S")
-    output_path = GENERATED_DIR / f"{timestamp}-{safe_filename(title)}.png"
-    render_thumbnail(title, subject_path, output_path)
+    output_path = GENERATED_DIR / f"{timestamp}-{config['slug']}-{safe_filename(title)}.png"
+    render_thumbnail(title, subject_path, output_path, config)
     if progress_callback:
         progress_callback(96, "Saving the finished thumbnail...")
 
@@ -493,8 +549,10 @@ def handle_create(script_text, title, subject_path=None, person_reference_path=N
         "negative_prompt": brief.get("negative_prompt", ""),
         "rationale": brief.get("rationale", ""),
         "thumbnail": str(output_path),
-        "design_asset": str(DESIGN_PATH),
-        "title_font": str(TITLE_FONT_PATH),
+        "client": config["slug"],
+        "client_name": config["display_name"],
+        "design_asset": str(config["design_path"]),
+        "title_font": str(config["font_path"]),
         "used_ai": used_ai,
         "person_reference_used": bool(person_reference_path),
     }
@@ -547,7 +605,7 @@ def get_job(job_id):
         return public_job(job) if job else None
 
 
-def run_create_job(job_id, script_text, title, person_reference_path=None):
+def run_create_job(job_id, script_text, title, person_reference_path=None, client_slug=DEFAULT_CLIENT):
     def progress(progress_value, message):
         update_job(job_id, status="running", progress=progress_value, message=message)
 
@@ -558,10 +616,13 @@ def run_create_job(job_id, script_text, title, person_reference_path=None):
             title=title,
             person_reference_path=person_reference_path,
             progress_callback=progress,
+            client_slug=client_slug,
         )
         thumbnail_name = Path(meta["thumbnail"]).name
         result = {
             "title": meta["title"],
+            "client": meta["client"],
+            "client_name": meta["client_name"],
             "visual_prompt": meta["visual_prompt"],
             "thumbnail_url": f"/generated/{thumbnail_name}",
             "used_ai": meta["used_ai"],
@@ -586,7 +647,7 @@ def run_create_job(job_id, script_text, title, person_reference_path=None):
         )
 
 
-def start_create_job(script_text, title, person_reference_path=None):
+def start_create_job(script_text, title, person_reference_path=None, client_slug=DEFAULT_CLIENT):
     cleanup_jobs()
     job_id = uuid.uuid4().hex
     now = time.time()
@@ -604,7 +665,7 @@ def start_create_job(script_text, title, person_reference_path=None):
         }
     thread = threading.Thread(
         target=run_create_job,
-        args=(job_id, script_text, title, person_reference_path),
+        args=(job_id, script_text, title, person_reference_path, client_slug),
         daemon=True,
     )
     thread.start()
@@ -612,13 +673,16 @@ def start_create_job(script_text, title, person_reference_path=None):
 
 
 class ThumbnailHandler(BaseHTTPRequestHandler):
-    server_version = "ZoomexThumbnailAgent/2.0"
+    server_version = "ThumbnailAgent/3.0"
 
     def log_message(self, fmt, *args):
         sys.stderr.write("[%s] %s\n" % (self.log_date_time_string(), fmt % args))
 
     def request_path(self):
         return urllib.parse.unquote(urllib.parse.urlsplit(self.path).path)
+
+    def request_query(self):
+        return urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
 
     def is_authorized(self):
         password = app_password()
@@ -639,7 +703,7 @@ class ThumbnailHandler(BaseHTTPRequestHandler):
             return True
         body = b"Authentication required." if include_body else b""
         self.send_response(401)
-        self.send_header("WWW-Authenticate", 'Basic realm="ZOOMEX Thumbnail Agent"')
+        self.send_header("WWW-Authenticate", 'Basic realm="Thumbnail Agent"')
         self.send_header("Content-Type", "text/plain")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
@@ -695,12 +759,20 @@ class ThumbnailHandler(BaseHTTPRequestHandler):
         if path == "/":
             return self.send_file(PUBLIC_DIR / "index.html")
         if path == "/api/status":
+            query = self.request_query()
+            client_slug = query.get("client", [DEFAULT_CLIENT])[0]
+            try:
+                config = get_client_config(client_slug)
+            except RuntimeError as error:
+                return self.send_json({"error": str(error)}, 404)
             return self.send_json(
                 {
                     "openai_configured": bool(openai_key()),
                     "model": openai_model(),
-                    "design_ready": DESIGN_PATH.exists(),
-                    "font_ready": TITLE_FONT_PATH.exists(),
+                    "client": public_client_status(config),
+                    "clients": {slug: public_client_status(client) for slug, client in CLIENTS.items()},
+                    "design_ready": config["design_path"].exists(),
+                    "font_ready": config["font_path"].exists(),
                     "auth_enabled": bool(app_password()),
                     "allow_browser_key_setup": browser_key_setup_allowed(),
                 }
@@ -739,6 +811,11 @@ class ThumbnailHandler(BaseHTTPRequestHandler):
 
             title = field_value(form, "title").strip()
             script_text = field_value(form, "script").strip()
+            client_slug = field_value(form, "client", DEFAULT_CLIENT).strip() or DEFAULT_CLIENT
+            try:
+                get_client_config(client_slug)
+            except RuntimeError as error:
+                return self.send_json({"error": str(error)}, 400)
             if not title:
                 return self.send_json({"error": "Add the thumbnail title first."}, 400)
             if not script_text:
@@ -754,6 +831,7 @@ class ThumbnailHandler(BaseHTTPRequestHandler):
                 script_text=script_text,
                 title=title,
                 person_reference_path=person_reference_path,
+                client_slug=client_slug,
             )
             return self.send_json(
                 {
@@ -779,12 +857,13 @@ def command_render(args):
         script_text=script_text,
         title=args.title,
         subject_path=Path(args.subject_image) if args.subject_image else None,
+        client_slug=args.client,
     )
     print(json.dumps(meta, indent=2))
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="Create ZOOMEX vertical thumbnails from scripts.")
+    parser = argparse.ArgumentParser(description="Create vertical thumbnails from scripts.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     serve_parser = subparsers.add_parser("serve", help="Start the local web app.")
@@ -795,6 +874,7 @@ def main(argv=None):
     render_parser.add_argument("--script", required=True)
     render_parser.add_argument("--title", required=True)
     render_parser.add_argument("--subject-image")
+    render_parser.add_argument("--client", default=DEFAULT_CLIENT, choices=sorted(CLIENTS))
 
     args = parser.parse_args(argv)
     if args.command == "serve":

@@ -26,15 +26,15 @@
             <span class="project-action">Open</span>
           </button>
 
-          <button class="project-tile project-tile-pending" type="button" disabled>
+          <button id="openAlliance" class="project-tile" type="button">
             <span class="project-logo-wrap client-logo-wrap">
               <img class="project-logo client-logo" src="/alliance-latin-card-logo.png" alt="Alliance Latin">
             </span>
             <span class="project-copy">
               <span class="project-name">Alliance Latin</span>
-              <span class="project-role">Template pending</span>
+              <span class="project-role">Thumbnail agent</span>
             </span>
-            <span class="project-status">Pending</span>
+            <span class="project-action">Open</span>
           </button>
 
           <button class="project-tile project-tile-pending" type="button" disabled>
@@ -100,9 +100,9 @@
         <header class="topbar">
           <div class="brand-lockup">
             <button id="backHome" class="home-back" type="button">1000media</button>
-            <img class="zoomex-logo" src="/zoomex-logo.png" alt="ZOOMEX">
+            <img id="studioLogo" class="studio-logo" src="/zoomex-logo.png" alt="ZOOMEX">
             <div class="brand-meta">
-              <h1>Thumbnail agent</h1>
+              <h1 id="studioTitle">Thumbnail agent</h1>
             </div>
             <p id="statusLine" class="sr-only" aria-live="polite">Checking setup...</p>
           </div>
@@ -148,7 +148,7 @@
             </div>
 
             <div class="preview-stage">
-              <div class="preview-wrap">
+              <div id="previewWrap" class="preview-wrap" data-placeholder="ZOOMEX">
                 <img id="preview" alt="Generated thumbnail preview">
               </div>
               <a id="downloadLink" class="secondary-btn" href="#" download hidden>Download PNG</a>

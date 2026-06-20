@@ -56,10 +56,27 @@ body.home-mode {
 
 body.zoomex-mode {
   color-scheme: dark;
+  --ink: #07100f;
+  --line: rgba(208, 230, 224, 0.22);
+  --accent: #12d8c3;
+  --accent-soft: rgba(18, 216, 195, 0.16);
   background:
     linear-gradient(180deg, rgba(6, 17, 15, 0.84), rgba(4, 10, 9, 0.96)),
     repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.045) 0 1px, transparent 1px 4px),
     linear-gradient(140deg, #0a201d 0%, #101515 48%, #07100f 100%);
+  color: var(--text);
+}
+
+body.alliance-mode {
+  color-scheme: dark;
+  --ink: #090909;
+  --line: rgba(224, 238, 244, 0.22);
+  --accent: #f7571e;
+  --accent-soft: rgba(247, 87, 30, 0.17);
+  background:
+    linear-gradient(180deg, rgba(10, 18, 20, 0.88), rgba(7, 10, 12, 0.96)),
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.04) 0 1px, transparent 1px 4px),
+    linear-gradient(145deg, #061318 0%, #0b1721 42%, #21130c 100%);
   color: var(--text);
 }
 
@@ -103,6 +120,15 @@ body.zoomex-mode::before {
   background:
     linear-gradient(180deg, rgba(18, 216, 195, 0.16), transparent 34%),
     repeating-linear-gradient(135deg, rgba(18, 216, 195, 0.08) 0 1px, transparent 1px 52px);
+  mix-blend-mode: screen;
+}
+
+body.alliance-mode::before {
+  opacity: 0.46;
+  background:
+    linear-gradient(180deg, rgba(0, 124, 190, 0.22), transparent 38%),
+    radial-gradient(circle at 84% 18%, rgba(247, 87, 30, 0.22), transparent 30%),
+    repeating-linear-gradient(135deg, rgba(0, 124, 190, 0.08) 0 1px, transparent 1px 52px);
   mix-blend-mode: screen;
 }
 
@@ -336,11 +362,15 @@ body.zoomex-mode::before {
   background: rgba(18, 216, 195, 0.11);
 }
 
-.zoomex-logo {
+.studio-logo {
   display: block;
   width: clamp(250px, 26vw, 360px);
   height: auto;
   max-width: 100%;
+}
+
+body.alliance-mode .studio-logo {
+  width: clamp(300px, 29vw, 420px);
 }
 
 h1,
@@ -667,7 +697,7 @@ textarea:focus {
 }
 
 .preview-wrap::before {
-  content: "ZOOMEX";
+  content: attr(data-placeholder);
   color: rgba(255, 255, 255, 0.22);
   font-size: 34px;
   font-weight: 950;
@@ -698,6 +728,11 @@ button,
   background: var(--accent);
   color: var(--ink);
   box-shadow: 0 12px 28px rgba(18, 216, 195, 0.22);
+}
+
+body.alliance-mode .primary-btn {
+  color: #ffffff;
+  box-shadow: 0 12px 28px rgba(247, 87, 30, 0.24);
 }
 
 #createBtn {
@@ -786,7 +821,7 @@ button,
     min-height: 0;
   }
 
-  .zoomex-logo {
+  .studio-logo {
     width: min(280px, 100%);
   }
 
