@@ -117,7 +117,7 @@ function setStatus(message, isError = false) {
 
 function updateReferenceFileName() {
   const file = personReference.files && personReference.files[0];
-  referenceFileName.textContent = file ? file.name : "Person reference (optional)";
+  referenceFileName.textContent = file ? file.name : "Want a specific person? Upload their photo.";
 }
 
 async function loadStatus() {
