@@ -41,6 +41,8 @@ PUBLIC_ASSET_PATHS = {
     "/1000media-logo.png",
     "/zoomex-logo.png",
     "/zoomex-card-logo.png",
+    "/alliance-latin-logo.png",
+    "/alliance-latin-card-logo.png",
     "/leverage-logo.png",
     "/leverage-card-logo.png",
     "/abh-logo.png",
