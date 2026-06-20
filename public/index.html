@@ -108,13 +108,7 @@
             </div>
 
             <div class="dropzone script-card">
-              <div class="script-head">
-                <label class="script-title" for="scriptText">Script</label>
-                <label class="reference-upload" for="personReference">
-                  <input id="personReference" type="file" accept="image/*">
-                  <span id="referenceFileName">Person reference (optional)</span>
-                </label>
-              </div>
+              <span>Script</span>
               <textarea id="scriptText" rows="15" placeholder="Paste your script here..."></textarea>
             </div>
 
@@ -126,6 +120,10 @@
             </div>
 
             <div class="preview-stage">
+              <label class="reference-upload preview-reference" for="personReference">
+                <input id="personReference" type="file" accept="image/*">
+                <span id="referenceFileName">Person reference (optional)</span>
+              </label>
               <div class="preview-wrap">
                 <img id="preview" alt="Generated thumbnail preview">
               </div>
