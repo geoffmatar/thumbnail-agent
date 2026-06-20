@@ -40,11 +40,17 @@ PUBLIC_ASSET_PATHS = {
     "/app.js",
     "/1000media-logo.png",
     "/zoomex-logo.png",
+    "/zoomex-card-logo.png",
     "/leverage-logo.png",
+    "/leverage-card-logo.png",
     "/abh-logo.png",
+    "/abh-card-logo.png",
     "/interfaith-logo.png",
+    "/interfaith-card-logo.png",
     "/dentiste-logo.png",
+    "/dentiste-card-logo.png",
     "/siyata-logo.jpg",
+    "/siyata-card-logo.png",
 }
 CANVAS_SIZE = (1080, 1920)
 

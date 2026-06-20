@@ -178,7 +178,7 @@ body.zoomex-mode::before {
   place-items: center;
   width: 176px;
   height: 68px;
-  padding: 10px;
+  padding: 0;
   overflow: hidden;
   background: #050908;
   border-radius: 8px;
@@ -188,7 +188,7 @@ body.zoomex-mode::before {
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: cover;
 }
 
 .client-logo-wrap {
@@ -763,9 +763,9 @@ button,
   }
 
   .project-tile-pending .project-logo-wrap {
-    width: 112px;
+    width: 124px;
     height: 48px;
-    padding: 7px;
+    padding: 0;
   }
 
   .project-action {
