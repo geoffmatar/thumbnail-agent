@@ -64,6 +64,7 @@ ZOOMEX_DESIGN_PATH = ASSETS_DIR / "zoomex-design.png"
 ZOOMEX_FONT_PATH = ASSETS_DIR / "Blinker-Bold.ttf"
 ALLIANCE_DESIGN_PATH = ASSETS_DIR / "alliance-latin-design.png"
 ALLIANCE_BLACK_DESIGN_PATH = ASSETS_DIR / "alliance-black-design.png"
+ALLIANCE_LGBTQ_DESIGN_PATH = ASSETS_DIR / "alliance-lgbtq-design.png"
 ALLIANCE_FONT_PATH = ASSETS_DIR / "Poppins-Bold.ttf"
 FOCUS_ZONE = {"x": 210, "y": 560, "w": 660, "h": 660}
 CLIENTS = {
@@ -110,6 +111,21 @@ CLIENTS = {
         "title_bands": [
             {"x": 38, "y": 1256, "w": 1042, "h": 108, "radius": 58, "fill": (43, 35, 34, 255), "text_fill": "#ffffff", "font_max": 74, "font_min": 34},
             {"x": -10, "y": 1376, "w": 1052, "h": 108, "radius": 58, "fill": (177, 98, 54, 255), "text_fill": "#ffffff", "font_max": 74, "font_min": 34},
+        ],
+    },
+    "alliance-lgbtq": {
+        "slug": "alliance-lgbtq",
+        "display_name": "Alliance LGBTQ",
+        "prompt_name": "Alliance LGBTQ+",
+        "design_path": ALLIANCE_LGBTQ_DESIGN_PATH,
+        "font_path": ALLIANCE_FONT_PATH,
+        "font_label": "Poppins ready",
+        "design_label": "Alliance LGBTQ design ready",
+        "logo_area": "top-center Alliance LGBTQ+ logo area",
+        "template_context": "fixed Alliance LGBTQ+ design layer with yellow and pink title bars",
+        "title_bands": [
+            {"x": 38, "y": 1256, "w": 1042, "h": 108, "radius": 58, "fill": (250, 202, 48, 255), "text_fill": "#ffffff", "font_max": 74, "font_min": 34},
+            {"x": -10, "y": 1376, "w": 1052, "h": 108, "radius": 58, "fill": (237, 49, 134, 255), "text_fill": "#ffffff", "font_max": 74, "font_min": 34},
         ],
     },
 }

@@ -3,6 +3,7 @@ const zoomexView = document.querySelector("#zoomexView");
 const openZoomex = document.querySelector("#openZoomex");
 const openAlliance = document.querySelector("#openAlliance");
 const openAllianceBlack = document.querySelector("#openAllianceBlack");
+const openAllianceLgbtq = document.querySelector("#openAllianceLgbtq");
 const backHome = document.querySelector("#backHome");
 const createBtn = document.querySelector("#createBtn");
 const statusLine = document.querySelector("#statusLine");
@@ -48,6 +49,14 @@ const clients = {
     bodyClass: "alliance-black-mode",
     logo: "/alliance-black-logo.png",
     alt: "Alliance Black Community",
+    title: "Thumbnail agent",
+    placeholder: "ALLIANCE",
+  },
+  "alliance-lgbtq": {
+    slug: "alliance-lgbtq",
+    bodyClass: "alliance-lgbtq-mode",
+    logo: "/alliance-lgbtq-logo.png",
+    alt: "Alliance LGBTQ+",
     title: "Thumbnail agent",
     placeholder: "ALLIANCE",
   },
@@ -278,6 +287,7 @@ async function createThumbnail() {
 openZoomex.addEventListener("click", () => showView("zoomex", true));
 openAlliance.addEventListener("click", () => showView("alliance-latin", true));
 openAllianceBlack.addEventListener("click", () => showView("alliance-black", true));
+openAllianceLgbtq.addEventListener("click", () => showView("alliance-lgbtq", true));
 backHome.addEventListener("click", () => showView("home", true));
 window.addEventListener("hashchange", syncViewFromUrl);
 personReference.addEventListener("change", updateReferenceFileName);
