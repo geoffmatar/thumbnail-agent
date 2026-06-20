@@ -120,10 +120,13 @@
             </div>
 
             <div class="preview-stage">
-              <label class="reference-upload preview-reference" for="personReference">
-                <input id="personReference" type="file" accept="image/*">
-                <span id="referenceFileName">Person reference (optional)</span>
-              </label>
+              <div class="reference-row">
+                <span class="reference-help">Specific person? Upload a reference.</span>
+                <label class="reference-upload preview-reference" for="personReference">
+                  <input id="personReference" type="file" accept="image/*">
+                  <span id="referenceFileName">Person reference (optional)</span>
+                </label>
+              </div>
               <div class="preview-wrap">
                 <img id="preview" alt="Generated thumbnail preview">
               </div>

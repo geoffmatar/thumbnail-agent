@@ -435,8 +435,23 @@ h2 {
   font-weight: 800;
 }
 
+.reference-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.reference-help {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
 .preview-reference {
-  justify-self: center;
   width: min(100%, 360px);
   max-width: 360px;
 }
@@ -758,6 +773,17 @@ button,
 
   .reference-upload {
     max-width: none;
+  }
+
+  .reference-row {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .reference-help {
+    text-align: center;
+    white-space: normal;
   }
 
   .topbar,
