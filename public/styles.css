@@ -567,6 +567,12 @@ textarea:focus {
   padding: 18px;
 }
 
+.create-panel {
+  display: grid;
+  min-height: var(--form-top-height);
+  height: var(--form-top-height);
+}
+
 .preview-stage {
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
@@ -634,7 +640,7 @@ button,
 #createBtn {
   justify-self: stretch;
   width: 100%;
-  min-height: 72px;
+  min-height: 100%;
   padding: 0 28px;
   font-size: 18px;
 }
@@ -721,10 +727,12 @@ button,
 
   #createBtn {
     justify-self: stretch;
+    min-height: 72px;
   }
 
   .title-card,
   .progress-panel,
+  .create-panel,
   .script-card,
   .preview-stage {
     height: auto;
