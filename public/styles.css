@@ -396,6 +396,58 @@ h2 {
   color: #ffffff;
 }
 
+.script-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.script-title {
+  color: #ffffff;
+  font-weight: 850;
+}
+
+.reference-upload {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  max-width: 260px;
+  min-height: 34px;
+  padding: 0 13px;
+  color: rgba(245, 248, 244, 0.84);
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(18, 216, 195, 0.28);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.reference-upload:hover,
+.reference-upload:focus-within {
+  color: #ffffff;
+  border-color: rgba(18, 216, 195, 0.52);
+  background: rgba(18, 216, 195, 0.12);
+}
+
+.reference-upload input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+#referenceFileName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 800;
+}
+
 .grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -709,6 +761,15 @@ button,
 
   .project-status {
     justify-self: start;
+  }
+
+  .script-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .reference-upload {
+    max-width: none;
   }
 
   .topbar,

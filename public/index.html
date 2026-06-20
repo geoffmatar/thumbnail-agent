@@ -107,10 +107,16 @@
               </label>
             </div>
 
-            <label class="dropzone script-card">
-              <span>Script</span>
+            <div class="dropzone script-card">
+              <div class="script-head">
+                <label class="script-title" for="scriptText">Script</label>
+                <label class="reference-upload" for="personReference">
+                  <input id="personReference" type="file" accept="image/*">
+                  <span id="referenceFileName">Person reference (optional)</span>
+                </label>
+              </div>
               <textarea id="scriptText" rows="15" placeholder="Paste your script here..."></textarea>
-            </label>
+            </div>
 
           </section>
 

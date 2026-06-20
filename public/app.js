@@ -6,6 +6,8 @@ const createBtn = document.querySelector("#createBtn");
 const statusLine = document.querySelector("#statusLine");
 const titleInput = document.querySelector("#titleInput");
 const scriptText = document.querySelector("#scriptText");
+const personReference = document.querySelector("#personReference");
+const referenceFileName = document.querySelector("#referenceFileName");
 const preview = document.querySelector("#preview");
 const downloadLink = document.querySelector("#downloadLink");
 const progressPanel = document.querySelector("#progressPanel");
@@ -113,6 +115,11 @@ function setStatus(message, isError = false) {
   statusLine.classList.toggle("error", isError);
 }
 
+function updateReferenceFileName() {
+  const file = personReference.files && personReference.files[0];
+  referenceFileName.textContent = file ? file.name : "Person reference (optional)";
+}
+
 async function loadStatus() {
   try {
     const status = await readJson("/api/status");
@@ -157,6 +164,9 @@ async function createThumbnail() {
   const form = new FormData();
   form.append("title", title);
   form.append("script", script);
+  if (personReference.files && personReference.files[0]) {
+    form.append("person_reference", personReference.files[0]);
+  }
 
   createBtn.disabled = true;
   downloadLink.hidden = true;
@@ -193,6 +203,7 @@ async function createThumbnail() {
 openZoomex.addEventListener("click", () => showView("zoomex", true));
 backHome.addEventListener("click", () => showView("home", true));
 window.addEventListener("hashchange", syncViewFromUrl);
+personReference.addEventListener("change", updateReferenceFileName);
 
 syncViewFromUrl();
 createBtn.addEventListener("click", createThumbnail);

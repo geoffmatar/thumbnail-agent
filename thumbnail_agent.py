@@ -2,6 +2,7 @@
 import argparse
 import base64
 import hmac
+import io
 import json
 import mimetypes
 import os
@@ -195,11 +196,19 @@ def visual_brief_schema():
     }
 
 
-def create_visual_brief(script_text, title):
+def create_visual_brief(script_text, title, has_person_reference=False):
+    reference_note = ""
+    if has_person_reference:
+        reference_note = (
+            "A person reference photo will be supplied to the image generator. "
+            "The generated thumbnail must feature that exact person as the main human subject, preserving their recognizable face, "
+            "hair, age, gender presentation, and overall appearance while placing them into the scene required by the script. "
+        )
     if not openai_key():
         return {
             "visual_prompt": (
                 "Create a vertical 9:16 full-frame editorial thumbnail image based on the script. "
+                f"{reference_note}"
                 f"No text, no captions, no logos, no black empty poster space. {focus_zone_prompt()}"
             ),
             "negative_prompt": "text, captions, watermarks, logos, blank black background, empty poster space",
@@ -229,6 +238,7 @@ def create_visual_brief(script_text, title):
                             "Create only the subject/background image prompt for this script. "
                             "The final image must be full-frame 9:16 and fill the whole thumbnail behind a fixed transparent ZOOMEX design layer. "
                             "Avoid black voids, blank poster space, title-card layouts, or large empty areas. "
+                            f"{reference_note}"
                             f"{focus_zone_prompt()} "
                             "Keep the lower title area visually calmer but still image-filled.\n\n"
                             f"SCRIPT:\n{script_text[:14000]}"
@@ -249,7 +259,7 @@ def create_visual_brief(script_text, title):
     return json.loads(extract_response_text(openai_responses_create(payload)))
 
 
-def generate_subject_image(brief):
+def generate_subject_image(brief, person_reference_path=None):
     prompt = (
         f"{brief['visual_prompt']}\n\n"
         "Hard requirements: vertical 9:16, full-bleed image, no text, no readable letters, no logos, no watermarks. "
@@ -260,9 +270,17 @@ def generate_subject_image(brief):
         f"{focus_zone_prompt()} "
         "Keep the area behind the title bars lower contrast but still visually present."
     )
+    content = [{"type": "input_text", "text": prompt}]
+    if person_reference_path:
+        content.append({"type": "input_image", "image_url": image_data_url(person_reference_path)})
+        content[0]["text"] += (
+            "\n\nUse the attached person reference photo as the identity reference for the main human subject. "
+            "Preserve the person's recognizable facial identity and upper-body appearance, but place them naturally into the generated scene. "
+            "The uploaded photo is a reference only; do not recreate it as a flat pasted photo."
+        )
     payload = {
         "model": openai_model(),
-        "input": [{"role": "user", "content": [{"type": "input_text", "text": prompt}]}],
+        "input": [{"role": "user", "content": content}],
         "tools": [{"type": "image_generation", "action": "generate"}],
     }
     image_bytes = base64.b64decode(extract_image_base64(openai_responses_create(payload)))
@@ -401,7 +419,16 @@ def field_value(form, name, default=""):
     return value
 
 
-def handle_create(script_text, title, subject_path=None, progress_callback=None):
+def image_data_url(path):
+    image = Image.open(path).convert("RGB")
+    image.thumbnail((1280, 1280), Image.Resampling.LANCZOS)
+    buffer = io.BytesIO()
+    image.save(buffer, "JPEG", quality=90, optimize=True)
+    encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
+    return f"data:image/jpeg;base64,{encoded}"
+
+
+def handle_create(script_text, title, subject_path=None, person_reference_path=None, progress_callback=None):
     ensure_dirs()
     title = title.strip()
     if not title:
@@ -411,12 +438,27 @@ def handle_create(script_text, title, subject_path=None, progress_callback=None)
 
     if progress_callback:
         progress_callback(12, "Reading the script and building the visual brief...")
-    brief = create_visual_brief(script_text, title)
+    brief = create_visual_brief(script_text, title, has_person_reference=bool(person_reference_path))
     if progress_callback:
-        progress_callback(34, "Visual direction ready. Generating the subject image...")
+        message = "Visual direction ready. Generating the subject image..."
+        if person_reference_path:
+            message = "Visual direction ready. Generating the subject image with the person reference..."
+        progress_callback(34, message)
     used_ai = bool(openai_key())
     if not subject_path:
-        subject_path = generate_subject_image(brief)
+        if not used_ai and person_reference_path:
+            subject_path = person_reference_path
+        else:
+            try:
+                subject_path = generate_subject_image(brief, person_reference_path=person_reference_path)
+            except Exception as error:
+                if not person_reference_path:
+                    raise
+                subject_path = person_reference_path
+                used_ai = False
+                brief["rationale"] = (
+                    f"{brief.get('rationale', '')} Used the person reference photo directly because AI image generation failed: {error}"
+                ).strip()
 
     if progress_callback:
         progress_callback(82, "Image generated. Applying the ZOOMEX template and title...")
@@ -435,6 +477,7 @@ def handle_create(script_text, title, subject_path=None, progress_callback=None)
         "design_asset": str(DESIGN_PATH),
         "title_font": str(TITLE_FONT_PATH),
         "used_ai": used_ai,
+        "person_reference_used": bool(person_reference_path),
     }
     save_json(output_path.with_suffix(".json"), meta)
     return meta
@@ -485,19 +528,25 @@ def get_job(job_id):
         return public_job(job) if job else None
 
 
-def run_create_job(job_id, script_text, title):
+def run_create_job(job_id, script_text, title, person_reference_path=None):
     def progress(progress_value, message):
         update_job(job_id, status="running", progress=progress_value, message=message)
 
     try:
         progress(6, "Starting thumbnail generation...")
-        meta = handle_create(script_text=script_text, title=title, progress_callback=progress)
+        meta = handle_create(
+            script_text=script_text,
+            title=title,
+            person_reference_path=person_reference_path,
+            progress_callback=progress,
+        )
         thumbnail_name = Path(meta["thumbnail"]).name
         result = {
             "title": meta["title"],
             "visual_prompt": meta["visual_prompt"],
             "thumbnail_url": f"/generated/{thumbnail_name}",
             "used_ai": meta["used_ai"],
+            "person_reference_used": meta.get("person_reference_used", False),
         }
         update_job(
             job_id,
@@ -518,7 +567,7 @@ def run_create_job(job_id, script_text, title):
         )
 
 
-def start_create_job(script_text, title):
+def start_create_job(script_text, title, person_reference_path=None):
     cleanup_jobs()
     job_id = uuid.uuid4().hex
     now = time.time()
@@ -534,7 +583,11 @@ def start_create_job(script_text, title):
             "result": None,
             "error": "",
         }
-    thread = threading.Thread(target=run_create_job, args=(job_id, script_text, title), daemon=True)
+    thread = threading.Thread(
+        target=run_create_job,
+        args=(job_id, script_text, title, person_reference_path),
+        daemon=True,
+    )
     thread.start()
     return job_id
 
@@ -672,7 +725,17 @@ class ThumbnailHandler(BaseHTTPRequestHandler):
             if not script_text:
                 return self.send_json({"error": "Paste the script first."}, 400)
 
-            job_id = start_create_job(script_text=script_text, title=title)
+            person_reference_path = save_upload(
+                form["person_reference"] if "person_reference" in form else None,
+                request_dir,
+                "person-reference.png",
+            )
+
+            job_id = start_create_job(
+                script_text=script_text,
+                title=title,
+                person_reference_path=person_reference_path,
+            )
             return self.send_json(
                 {
                     "job_id": job_id,
