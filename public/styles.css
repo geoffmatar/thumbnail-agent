@@ -388,7 +388,7 @@ h2 {
 
 .control-panel {
   display: grid;
-  grid-template-rows: var(--form-top-height) 126px calc(var(--form-work-height) - 142px);
+  grid-template-rows: var(--form-top-height) calc(var(--form-work-height) - 142px) 126px;
   gap: 16px;
   padding: 18px;
 }
