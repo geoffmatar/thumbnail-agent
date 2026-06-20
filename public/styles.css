@@ -436,11 +436,11 @@ h2 {
 }
 
 .reference-row {
-  display: flex;
-  align-items: center;
+  display: grid;
   justify-content: center;
-  gap: 12px;
-  width: 100%;
+  justify-items: center;
+  gap: 8px;
+  width: min(100%, 320px);
 }
 
 .reference-help {
@@ -448,12 +448,12 @@ h2 {
   font-size: 13px;
   font-weight: 500;
   line-height: 1.25;
-  white-space: nowrap;
+  text-align: center;
 }
 
 .preview-reference {
-  width: min(100%, 360px);
-  max-width: 360px;
+  width: 100%;
+  max-width: 320px;
 }
 
 .grid {
@@ -776,14 +776,11 @@ button,
   }
 
   .reference-row {
-    align-items: stretch;
-    flex-direction: column;
-    gap: 8px;
+    width: 100%;
   }
 
   .reference-help {
-    text-align: center;
-    white-space: normal;
+    max-width: 320px;
   }
 
   .topbar,
