@@ -43,6 +43,8 @@ PUBLIC_ASSET_PATHS = {
     "/leverage-logo.png",
     "/abh-logo.png",
     "/interfaith-logo.png",
+    "/dentiste-logo.png",
+    "/siyata-logo.jpg",
 }
 CANVAS_SIZE = (1080, 1920)
 
