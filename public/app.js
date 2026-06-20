@@ -2,6 +2,7 @@ const homeView = document.querySelector("#homeView");
 const zoomexView = document.querySelector("#zoomexView");
 const openZoomex = document.querySelector("#openZoomex");
 const openAlliance = document.querySelector("#openAlliance");
+const openAllianceBlack = document.querySelector("#openAllianceBlack");
 const backHome = document.querySelector("#backHome");
 const createBtn = document.querySelector("#createBtn");
 const statusLine = document.querySelector("#statusLine");
@@ -39,6 +40,14 @@ const clients = {
     bodyClass: "alliance-mode",
     logo: "/alliance-latin-logo.png",
     alt: "Alliance Latin Community",
+    title: "Thumbnail agent",
+    placeholder: "ALLIANCE",
+  },
+  "alliance-black": {
+    slug: "alliance-black",
+    bodyClass: "alliance-black-mode",
+    logo: "/alliance-black-logo.png",
+    alt: "Alliance Black Community",
     title: "Thumbnail agent",
     placeholder: "ALLIANCE",
   },
@@ -268,6 +277,7 @@ async function createThumbnail() {
 
 openZoomex.addEventListener("click", () => showView("zoomex", true));
 openAlliance.addEventListener("click", () => showView("alliance-latin", true));
+openAllianceBlack.addEventListener("click", () => showView("alliance-black", true));
 backHome.addEventListener("click", () => showView("home", true));
 window.addEventListener("hashchange", syncViewFromUrl);
 personReference.addEventListener("change", updateReferenceFileName);

@@ -63,6 +63,7 @@ BOTTOM_BAND = {"x": 160, "y": 1366, "w": 760, "h": 126, "radius": 64}
 ZOOMEX_DESIGN_PATH = ASSETS_DIR / "zoomex-design.png"
 ZOOMEX_FONT_PATH = ASSETS_DIR / "Blinker-Bold.ttf"
 ALLIANCE_DESIGN_PATH = ASSETS_DIR / "alliance-latin-design.png"
+ALLIANCE_BLACK_DESIGN_PATH = ASSETS_DIR / "alliance-black-design.png"
 ALLIANCE_FONT_PATH = ASSETS_DIR / "Poppins-Bold.ttf"
 FOCUS_ZONE = {"x": 210, "y": 560, "w": 660, "h": 660}
 CLIENTS = {
@@ -94,6 +95,21 @@ CLIENTS = {
         "title_bands": [
             {"x": 38, "y": 1256, "w": 1042, "h": 108, "radius": 58, "fill": (0, 124, 190, 255), "text_fill": "#ffffff", "font_max": 74, "font_min": 34},
             {"x": -10, "y": 1376, "w": 1052, "h": 108, "radius": 58, "fill": (247, 87, 30, 255), "text_fill": "#ffffff", "font_max": 74, "font_min": 34},
+        ],
+    },
+    "alliance-black": {
+        "slug": "alliance-black",
+        "display_name": "Alliance Black",
+        "prompt_name": "Alliance Black Community",
+        "design_path": ALLIANCE_BLACK_DESIGN_PATH,
+        "font_path": ALLIANCE_FONT_PATH,
+        "font_label": "Poppins ready",
+        "design_label": "Alliance Black design ready",
+        "logo_area": "top-center Alliance Black Community logo area",
+        "template_context": "fixed Alliance Black Community design layer with espresso and copper title bars",
+        "title_bands": [
+            {"x": 38, "y": 1256, "w": 1042, "h": 108, "radius": 58, "fill": (43, 35, 34, 255), "text_fill": "#ffffff", "font_max": 74, "font_min": 34},
+            {"x": -10, "y": 1376, "w": 1052, "h": 108, "radius": 58, "fill": (177, 98, 54, 255), "text_fill": "#ffffff", "font_max": 74, "font_min": 34},
         ],
     },
 }
