@@ -273,38 +273,38 @@ body.alliance-black-mode::before {
 .project-grid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 12px;
+  gap: 18px;
   justify-items: stretch;
   width: min(1180px, 100%);
 }
 
 .project-tile {
   display: grid;
-  grid-template-columns: 176px minmax(0, 1fr) auto;
+  grid-template-columns: 220px minmax(0, 1fr) 68px;
   grid-template-areas: "logo copy action";
-  gap: 20px;
+  gap: clamp(28px, 4vw, 48px);
   align-items: center;
-  min-height: 112px;
-  padding: 18px;
+  min-height: 132px;
+  padding: 22px 56px;
   text-align: left;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(247, 244, 253, 0.9)),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(250, 247, 255, 0.9)),
     #ffffff;
-  border: 1px solid rgba(103, 64, 239, 0.12);
-  border-radius: 8px;
-  box-shadow: 0 28px 70px rgba(67, 54, 86, 0.13);
+  border: 1px solid rgba(103, 64, 239, 0.14);
+  border-radius: 999px;
+  box-shadow: 0 22px 60px rgba(67, 54, 86, 0.08);
 }
 
 .project-logo-wrap {
   grid-area: logo;
   display: grid;
   place-items: center;
-  width: 176px;
-  height: 68px;
+  width: 220px;
+  height: 85px;
   padding: 0;
   overflow: hidden;
   background: #050908;
-  border-radius: 8px;
+  border-radius: 10px;
 }
 
 .project-logo {
@@ -322,12 +322,12 @@ body.alliance-black-mode::before {
 .project-copy {
   grid-area: copy;
   display: grid;
-  gap: 4px;
+  gap: 5px;
 }
 
 .project-name {
   color: #30263c;
-  font-size: 24px;
+  font-size: clamp(26px, 2.4vw, 34px);
   line-height: 1;
   font-weight: 900;
 }
@@ -343,25 +343,44 @@ body.alliance-black-mode::before {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 92px;
-  min-height: 46px;
-  color: #ffffff;
-  background: #6740ef;
-  border-radius: 999px;
-  font-size: 14px;
-  font-weight: 900;
+  width: 64px;
+  height: 64px;
+  justify-self: end;
+  color: #6740ef;
+  background: rgba(255, 255, 255, 0.62);
+  border: 2px solid rgba(103, 64, 239, 0.82);
+  border-radius: 24px;
+  box-shadow: 0 12px 30px rgba(103, 64, 239, 0.1);
+  transition: background 180ms ease, transform 180ms ease, box-shadow 180ms ease;
+}
+
+.project-action svg {
+  display: block;
+  width: 32px;
+  height: 32px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .project-tile:hover,
 .project-tile:focus-visible {
   transform: translateY(-2px);
-  box-shadow: 0 34px 80px rgba(67, 54, 86, 0.18);
+  box-shadow: 0 30px 74px rgba(67, 54, 86, 0.13);
+}
+
+.project-tile:hover .project-action,
+.project-tile:focus-visible .project-action {
+  background: rgba(103, 64, 239, 0.08);
+  transform: translateX(2px);
 }
 
 .project-tile-pending {
-  grid-template-columns: 176px minmax(0, 1fr) auto;
+  grid-template-columns: 220px minmax(0, 1fr) auto;
   grid-template-areas: "logo copy status";
-  min-height: 112px;
+  min-height: 132px;
   cursor: default;
   opacity: 1;
 }
@@ -386,7 +405,7 @@ body.alliance-black-mode::before {
 }
 
 .project-tile-pending .project-name {
-  font-size: 24px;
+  font-size: clamp(26px, 2.4vw, 34px);
   line-height: 1;
 }
 
@@ -399,11 +418,12 @@ body.alliance-black-mode::before {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 82px;
-  min-height: 36px;
-  padding: 0 14px;
-  color: #83788e;
-  background: rgba(103, 64, 239, 0.08);
+  min-width: 104px;
+  min-height: 44px;
+  padding: 0 16px;
+  color: #7c7388;
+  background: rgba(103, 64, 239, 0.07);
+  border: 1px solid rgba(103, 64, 239, 0.08);
   border-radius: 999px;
   font-size: 12px;
   font-weight: 900;
@@ -1262,30 +1282,55 @@ body.alliance-lgbtq-mode .secondary-btn {
   }
 
   .project-tile {
-    grid-template-columns: 124px minmax(0, 1fr);
-    grid-template-areas: "logo copy" "action action";
-    gap: 16px;
-    min-height: 0;
-    padding: 18px;
+    grid-template-columns: 124px minmax(0, 1fr) 50px;
+    grid-template-areas: "logo copy action";
+    gap: 12px;
+    min-height: 86px;
+    padding: 14px;
+    border-radius: 34px;
   }
 
   .project-logo-wrap {
     width: 124px;
     height: 48px;
+    border-radius: 8px;
   }
 
   .project-tile-pending {
-    grid-template-columns: 124px minmax(0, 1fr);
-    grid-template-areas: "logo copy" "status status";
-    padding: 18px;
+    grid-template-columns: 124px minmax(0, 1fr) auto;
+    grid-template-areas: "logo copy status";
+    padding: 14px;
   }
 
   .project-action {
-    justify-self: start;
+    width: 50px;
+    height: 50px;
+    justify-self: end;
+    border-radius: 18px;
+  }
+
+  .project-action svg {
+    width: 25px;
+    height: 25px;
   }
 
   .project-status {
-    justify-self: start;
+    justify-self: end;
+    min-width: 86px;
+    min-height: 34px;
+    padding: 0 10px;
+    font-size: 11px;
+  }
+
+  .project-name,
+  .project-tile-pending .project-name {
+    font-size: clamp(20px, 6vw, 25px);
+    line-height: 1.05;
+  }
+
+  .project-role,
+  .project-tile-pending .project-role {
+    font-size: 12px;
   }
 
   .topbar,
