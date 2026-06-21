@@ -1150,26 +1150,22 @@ body.alliance-lgbtq-mode .secondary-btn {
   }
 
   .project-tile {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: "logo" "copy" "action";
+    grid-template-columns: 124px minmax(0, 1fr);
+    grid-template-areas: "logo copy" "action action";
+    gap: 16px;
     min-height: 0;
-    padding: 22px;
-  }
-
-  .project-tile:not(.project-tile-pending) .project-logo-wrap {
-    width: 100%;
-  }
-
-  .project-tile-pending {
-    grid-template-columns: auto minmax(0, 1fr);
-    grid-template-areas: "logo copy" "status status";
     padding: 18px;
   }
 
-  .project-tile-pending .project-logo-wrap {
+  .project-logo-wrap {
     width: 124px;
     height: 48px;
-    padding: 0;
+  }
+
+  .project-tile-pending {
+    grid-template-columns: 124px minmax(0, 1fr);
+    grid-template-areas: "logo copy" "status status";
+    padding: 18px;
   }
 
   .project-action {
