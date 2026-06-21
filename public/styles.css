@@ -322,7 +322,7 @@ body.alliance-black-mode::before {
 .project-copy {
   grid-area: copy;
   display: grid;
-  gap: 6px;
+  gap: 4px;
 }
 
 .project-name {
@@ -334,8 +334,8 @@ body.alliance-black-mode::before {
 
 .project-role {
   color: #7c7388;
-  font-size: 15px;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 400;
 }
 
 .project-action {
@@ -391,7 +391,7 @@ body.alliance-black-mode::before {
 }
 
 .project-tile-pending .project-role {
-  font-size: 15px;
+  font-size: 13px;
 }
 
 .project-status {
