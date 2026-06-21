@@ -399,13 +399,16 @@ body.alliance-black-mode::before {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 92px;
-  min-height: 46px;
+  min-width: 82px;
+  min-height: 36px;
+  padding: 0 14px;
   color: #83788e;
   background: rgba(103, 64, 239, 0.08);
   border-radius: 999px;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .app-shell {
