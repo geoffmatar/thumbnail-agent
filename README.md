@@ -48,11 +48,10 @@ For internal company use, host this folder as a private web app and set these se
 
 ```bash
 OPENAI_API_KEY="your_server_key"
-APP_PASSWORD="a_shared_company_password"
 OPENAI_MODEL="gpt-5.5"
 ```
 
-When `APP_PASSWORD` is set, the browser asks for a username and password before anyone can use the app. The username can be anything; the password must match `APP_PASSWORD`.
+The hosted link opens directly for teammates. Anyone with the hosted link can use it.
 
 The hosted app should use:
 

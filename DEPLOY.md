@@ -1,10 +1,10 @@
 # Deploying The Internal ZOOMEX Thumbnail Agent
 
-This app is intended to be deployed as a private internal web app.
+This app is intended to be deployed as an internal web app.
 
 ## What Teammates Get
 
-Your team gets one URL. When they open it, the browser asks for a password. After that, they can enter a title and script to generate thumbnails.
+Your team gets one URL. When they open it, they can enter a title and script to generate thumbnails.
 
 ## Required Server Secrets
 
@@ -12,7 +12,6 @@ Set these environment variables in your hosting provider:
 
 ```bash
 OPENAI_API_KEY=sk-...
-APP_PASSWORD=choose-a-company-password
 OPENAI_MODEL=gpt-5.5
 ```
 
@@ -32,7 +31,7 @@ Start command: python3 thumbnail_agent.py serve --host 0.0.0.0 --port $PORT
 
 4. Add the environment variables above.
 5. Deploy.
-6. Send your team the Render URL and the `APP_PASSWORD`.
+6. Send your team the Render URL.
 
 This folder also includes `render.yaml` if you prefer Render Blueprint setup.
 
@@ -44,7 +43,6 @@ The included `Dockerfile` works on hosts that accept Docker apps:
 docker build -t zoomex-thumbnail-agent .
 docker run -p 8787:8787 \
   -e OPENAI_API_KEY="sk-..." \
-  -e APP_PASSWORD="your-password" \
   -e PORT=8787 \
   zoomex-thumbnail-agent
 ```
@@ -57,8 +55,7 @@ http://localhost:8787
 
 ## Important Security Notes
 
-- Keep the app behind `APP_PASSWORD`.
 - Use a private repository.
 - Do not enable browser API-key setup on the hosted app.
-- Monitor OpenAI usage, because anyone with the password can spend API credits.
+- Monitor OpenAI usage, because anyone with the link can spend API credits.
 - Generated PNGs should be downloaded after creation; simple hosts may not keep files forever after restarts.

@@ -8,7 +8,5 @@ services:
     envVars:
       - key: OPENAI_API_KEY
         sync: false
-      - key: APP_PASSWORD
-        sync: false
       - key: OPENAI_MODEL
         value: gpt-5.5

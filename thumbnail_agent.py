@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import argparse
 import base64
-import hmac
 import io
 import json
 import mimetypes
@@ -218,10 +217,6 @@ def openai_key():
 
 def openai_model():
     return os.environ.get("OPENAI_MODEL", "gpt-5.5")
-
-
-def app_password():
-    return os.environ.get("APP_PASSWORD", "").strip()
 
 
 def browser_key_setup_allowed():
@@ -726,33 +721,6 @@ class ThumbnailHandler(BaseHTTPRequestHandler):
     def request_query(self):
         return urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
 
-    def is_authorized(self):
-        password = app_password()
-        if not password:
-            return True
-        auth_header = self.headers.get("Authorization", "")
-        if not auth_header.startswith("Basic "):
-            return False
-        try:
-            decoded = base64.b64decode(auth_header.split(" ", 1)[1]).decode("utf-8")
-        except Exception:
-            return False
-        provided_password = decoded.split(":", 1)[1] if ":" in decoded else ""
-        return hmac.compare_digest(provided_password, password)
-
-    def require_authorized(self, include_body=True):
-        if self.is_authorized():
-            return True
-        body = b"Authentication required." if include_body else b""
-        self.send_response(401)
-        self.send_header("WWW-Authenticate", 'Basic realm="Thumbnail Agent"')
-        self.send_header("Content-Type", "text/plain")
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        if include_body:
-            self.wfile.write(body)
-        return False
-
     def send_json(self, payload, status=200, include_body=True):
         body = json.dumps(payload).encode("utf-8")
         self.send_response(status)
@@ -783,8 +751,6 @@ class ThumbnailHandler(BaseHTTPRequestHandler):
             return self.send_json({"ok": True}, include_body=False)
         if path == "/":
             return self.send_file(PUBLIC_DIR / "index.html", include_body=False)
-        if not self.require_authorized(include_body=False):
-            return
         if path == "/api/status":
             return self.send_json({"ok": True}, include_body=False)
         if path.startswith("/api/jobs/"):
@@ -802,8 +768,6 @@ class ThumbnailHandler(BaseHTTPRequestHandler):
         path = self.request_path()
         if path == "/healthz":
             return self.send_json({"ok": True})
-        if not self.require_authorized():
-            return
         if path == "/":
             return self.send_file(PUBLIC_DIR / "index.html")
         if path == "/api/status":
@@ -821,7 +785,7 @@ class ThumbnailHandler(BaseHTTPRequestHandler):
                     "clients": {slug: public_client_status(client) for slug, client in CLIENTS.items()},
                     "design_ready": config["design_path"].exists(),
                     "font_ready": config["font_path"].exists(),
-                    "auth_enabled": bool(app_password()),
+                    "auth_enabled": False,
                     "allow_browser_key_setup": browser_key_setup_allowed(),
                 }
             )
@@ -842,8 +806,6 @@ class ThumbnailHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = self.request_path()
-        if not self.require_authorized():
-            return
         if path == "/api/settings":
             return self.send_json({"error": "API key setup is disabled. Set OPENAI_API_KEY on the server."}, 403)
 
