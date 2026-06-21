@@ -121,7 +121,12 @@
       <section class="workspace">
         <header class="topbar">
           <div class="brand-lockup">
-            <button id="backHome" class="home-back" type="button">1000media</button>
+            <button id="backHome" class="home-back" type="button" aria-label="Back to home">
+              <svg class="home-back-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 10.5 12 4l8 6.5v8a1.5 1.5 0 0 1-1.5 1.5H15v-6H9v6H5.5A1.5 1.5 0 0 1 4 18.5z"></path>
+              </svg>
+              <span>1000media</span>
+            </button>
             <img id="studioLogo" class="studio-logo" src="/zoomex-logo.png" alt="ZOOMEX">
             <div class="brand-meta">
               <h1 id="studioTitle">Thumbnail agent</h1>

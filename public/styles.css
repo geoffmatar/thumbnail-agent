@@ -379,6 +379,9 @@ body.alliance-black-mode::before {
 
 .home-back {
   justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   min-height: 30px;
   padding: 0 11px;
   color: rgba(245, 248, 244, 0.82);
@@ -387,6 +390,13 @@ body.alliance-black-mode::before {
   border-radius: 999px;
   font-size: 12px;
   font-weight: 850;
+}
+
+.home-back-icon {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+  flex: 0 0 auto;
 }
 
 .home-back:hover,
@@ -398,13 +408,13 @@ body.alliance-black-mode::before {
 
 .studio-logo {
   display: block;
-  width: clamp(250px, 26vw, 360px);
+  width: clamp(210px, 21vw, 300px);
   height: auto;
   max-width: 100%;
 }
 
 body.alliance-mode .studio-logo {
-  width: clamp(300px, 29vw, 420px);
+  width: clamp(240px, 23vw, 340px);
 }
 
 body.alliance-mode .studio-logo,
@@ -414,7 +424,7 @@ body.alliance-lgbtq-mode .studio-logo {
 }
 
 body.alliance-black-mode .studio-logo {
-  width: clamp(300px, 29vw, 420px);
+  width: clamp(240px, 23vw, 340px);
 }
 
 body.alliance-mode .topbar {
@@ -1029,7 +1039,7 @@ body.alliance-lgbtq-mode::before {
 }
 
 body.alliance-lgbtq-mode .studio-logo {
-  width: clamp(300px, 29vw, 420px);
+  width: clamp(240px, 23vw, 340px);
 }
 
 body.alliance-lgbtq-mode .topbar {
@@ -1193,7 +1203,7 @@ body.alliance-lgbtq-mode .secondary-btn {
   }
 
   .studio-logo {
-    width: min(280px, 100%);
+    width: min(220px, 100%);
   }
 
   h1 {
