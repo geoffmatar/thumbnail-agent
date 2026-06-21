@@ -54,6 +54,15 @@ PUBLIC_ASSET_PATHS = {
     "/dentiste-card-logo.png",
     "/siyata-logo.jpg",
     "/siyata-card-logo.png",
+    "/builders-middle-east-card-logo.png",
+    "/favicon.ico",
+    "/favicon-16x16.png",
+    "/favicon-32x32.png",
+    "/favicon-48x48.png",
+    "/apple-touch-icon.png",
+    "/android-chrome-192x192.png",
+    "/android-chrome-512x512.png",
+    "/site.webmanifest",
 }
 CANVAS_SIZE = (1080, 1920)
 
