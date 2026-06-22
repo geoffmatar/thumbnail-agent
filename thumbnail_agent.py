@@ -102,8 +102,8 @@ CLIENTS = {
         "logo_area": "top-center Alliance Latin Community logo area",
         "template_context": "fixed Alliance Latin Community design layer with blue and orange title bars",
         "title_bands": [
-            {"x": 38, "y": 1256, "w": 1042, "h": 108, "radius": 58, "fill": (0, 124, 190, 255), "text_fill": "#ffffff", "font_max": 74, "font_min": 34},
-            {"x": -10, "y": 1376, "w": 1052, "h": 108, "radius": 58, "fill": (247, 87, 30, 255), "text_fill": "#ffffff", "font_max": 74, "font_min": 34},
+            {"x": 38, "y": 1256, "w": 1042, "h": 108, "radius": 58, "fill": (0, 124, 190, 255), "text_fill": "#ffffff", "font_max": 74, "font_min": 34, "text_center_x": 540},
+            {"x": -10, "y": 1376, "w": 1052, "h": 108, "radius": 58, "fill": (247, 87, 30, 255), "text_fill": "#ffffff", "font_max": 74, "font_min": 34, "text_center_x": 540},
         ],
     },
     "alliance-black": {
@@ -117,8 +117,8 @@ CLIENTS = {
         "logo_area": "top-center Alliance Black Community logo area",
         "template_context": "fixed Alliance Black Community design layer with espresso and copper title bars",
         "title_bands": [
-            {"x": 38, "y": 1256, "w": 1042, "h": 108, "radius": 58, "fill": (43, 35, 34, 255), "text_fill": "#ffffff", "font_max": 74, "font_min": 34},
-            {"x": -10, "y": 1376, "w": 1052, "h": 108, "radius": 58, "fill": (177, 98, 54, 255), "text_fill": "#ffffff", "font_max": 74, "font_min": 34},
+            {"x": 38, "y": 1256, "w": 1042, "h": 108, "radius": 58, "fill": (43, 35, 34, 255), "text_fill": "#ffffff", "font_max": 74, "font_min": 34, "text_center_x": 540},
+            {"x": -10, "y": 1376, "w": 1052, "h": 108, "radius": 58, "fill": (177, 98, 54, 255), "text_fill": "#ffffff", "font_max": 74, "font_min": 34, "text_center_x": 540},
         ],
     },
     "alliance-lgbtq": {
@@ -132,8 +132,8 @@ CLIENTS = {
         "logo_area": "top-center Alliance LGBTQ+ logo area",
         "template_context": "fixed Alliance LGBTQ+ design layer with yellow and pink title bars",
         "title_bands": [
-            {"x": 38, "y": 1256, "w": 1042, "h": 108, "radius": 58, "fill": (250, 202, 48, 255), "text_fill": "#ffffff", "font_max": 74, "font_min": 34},
-            {"x": -10, "y": 1376, "w": 1052, "h": 108, "radius": 58, "fill": (237, 49, 134, 255), "text_fill": "#ffffff", "font_max": 74, "font_min": 34},
+            {"x": 38, "y": 1256, "w": 1042, "h": 108, "radius": 58, "fill": (250, 202, 48, 255), "text_fill": "#ffffff", "font_max": 74, "font_min": 34, "text_center_x": 540},
+            {"x": -10, "y": 1376, "w": 1052, "h": 108, "radius": 58, "fill": (237, 49, 134, 255), "text_fill": "#ffffff", "font_max": 74, "font_min": 34, "text_center_x": 540},
         ],
     },
 }
@@ -455,8 +455,10 @@ def fit_font(text, max_width, max_height, max_size, min_size, config=None):
 def draw_centered_text(draw, box, text, font, fill):
     x, y, w, h = box["x"], box["y"], box["w"], box["h"]
     left, top, right, bottom = draw.textbbox((0, 0), text, font=font)
-    tx = x + (w - (right - left)) / 2 - left
-    ty = y + (h - (bottom - top)) / 2 - top
+    center_x = box.get("text_center_x", x + w / 2)
+    center_y = box.get("text_center_y", y + h / 2)
+    tx = center_x - (right + left) / 2
+    ty = center_y - (bottom + top) / 2
     draw.text((tx, ty), text, font=font, fill=fill)
 
 
