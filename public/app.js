@@ -13,9 +13,7 @@ const titleInput = document.querySelector("#titleInput");
 const scriptText = document.querySelector("#scriptText");
 const personReference = document.querySelector("#personReference");
 const referenceFileName = document.querySelector("#referenceFileName");
-const preview = document.querySelector("#preview");
-const previewWrap = document.querySelector("#previewWrap");
-const downloadLink = document.querySelector("#downloadLink");
+const resultsList = document.querySelector("#resultsList");
 const progressPanel = document.querySelector("#progressPanel");
 const progressLabel = document.querySelector("#progressLabel");
 const progressPercent = document.querySelector("#progressPercent");
@@ -94,7 +92,6 @@ function showView(view, updateUrl = false) {
     studioLogo.src = client.logo;
     studioLogo.alt = client.alt;
     studioTitle.textContent = client.title;
-    previewWrap.dataset.placeholder = client.placeholder;
     hydrateClientState(client.slug);
     loadStatus(client.slug);
   }
@@ -165,24 +162,73 @@ function renderReferenceState(clientSlug = currentClient) {
     : "Upload image";
 }
 
+function resultItems(result) {
+  if (!result) return [];
+  if (Array.isArray(result.thumbnails) && result.thumbnails.length) return result.thumbnails;
+  return [result];
+}
+
+function createResultCard(item, index, state, client) {
+  const card = document.createElement("article");
+  card.className = "result-card";
+
+  const wrap = document.createElement("div");
+  wrap.className = "preview-wrap";
+  wrap.dataset.placeholder = client.placeholder;
+
+  const image = document.createElement("img");
+  image.className = "result-image";
+  image.alt = item?.option_label
+    ? `${item.option_label} generated thumbnail preview`
+    : "Generated thumbnail preview";
+
+  if (item?.thumbnail_url) {
+    image.src = `${item.thumbnail_url}?v=${state.resultVersion}`;
+    image.style.display = "block";
+  } else {
+    image.style.display = "none";
+  }
+
+  wrap.appendChild(image);
+  card.appendChild(wrap);
+
+  if (item?.option_label) {
+    const label = document.createElement("span");
+    label.className = "result-option-label";
+    label.textContent = item.option_label;
+    card.appendChild(label);
+  }
+
+  const link = document.createElement("a");
+  link.className = "secondary-btn result-download";
+  link.href = item?.download_url || item?.thumbnail_url || "#";
+  link.download = item?.filename || `thumbnail-${index + 1}.png`;
+  link.textContent = item?.option_label ? `Download ${item.option_label}` : "Download PNG";
+  link.hidden = !item?.thumbnail_url;
+  card.appendChild(link);
+
+  return card;
+}
+
 function renderResultState(clientSlug = currentClient) {
   if (clientSlug !== currentClient) return;
   const state = getClientState(clientSlug);
-  if (!state.result) {
-    preview.removeAttribute("src");
-    preview.style.display = "none";
-    downloadLink.href = "#";
-    downloadLink.download = "";
-    downloadLink.hidden = true;
+  const client = clients[clientSlug];
+  const items = resultItems(state.result);
+
+  resultsList.replaceChildren();
+  resultsList.classList.toggle("has-results", items.length > 0);
+  resultsList.classList.toggle("multiple-results", items.length > 1);
+  resultsList.classList.toggle("single-result", items.length <= 1);
+
+  if (!items.length) {
+    resultsList.appendChild(createResultCard(null, 0, state, client));
     return;
   }
 
-  const result = state.result;
-  preview.src = `${result.thumbnail_url}?v=${state.resultVersion}`;
-  preview.style.display = "block";
-  downloadLink.href = result.download_url || result.thumbnail_url;
-  downloadLink.download = result.filename || "thumbnail.png";
-  downloadLink.hidden = false;
+  items.forEach((item, index) => {
+    resultsList.appendChild(createResultCard(item, index, state, client));
+  });
 }
 
 function displayProgressValue(job, state) {
@@ -288,7 +334,8 @@ function hydrateClientState(clientSlug) {
 }
 
 async function downloadThumbnail(event) {
-  if (downloadLink.hidden || !downloadLink.href || downloadLink.href.endsWith("#")) return;
+  const downloadLink = event.target.closest(".result-download");
+  if (!downloadLink || downloadLink.hidden || !downloadLink.href || downloadLink.href.endsWith("#")) return;
   event.preventDefault();
 
   try {
@@ -388,7 +435,11 @@ async function createThumbnail() {
     state.result = result;
     state.resultVersion = Date.now();
     renderResultState(jobClient);
-    setStatus(result.used_ai ? "Done. Saved as a new thumbnail." : "Done with local fallback.", false, jobClient);
+    const createdCount = resultItems(result).length;
+    const doneMessage = createdCount > 1
+      ? `Done. Saved ${createdCount} new thumbnails.`
+      : "Done. Saved as a new thumbnail.";
+    setStatus(result.used_ai ? doneMessage : "Done with local fallback.", false, jobClient);
   } catch (error) {
     updateProgress({
       status: "error",
@@ -419,7 +470,7 @@ scriptText.addEventListener("input", () => {
   getClientState().script = scriptText.value;
 });
 personReference.addEventListener("change", updateReferenceFileName);
-downloadLink.addEventListener("click", downloadThumbnail);
+resultsList.addEventListener("click", downloadThumbnail);
 
 syncViewFromUrl();
 createBtn.addEventListener("click", createThumbnail);

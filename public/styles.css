@@ -964,10 +964,9 @@ body.alliance-black-mode .progress-fill {
 
 .preview-stage {
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr);
   justify-items: center;
   align-content: stretch;
-  gap: 12px;
   min-height: var(--form-work-height);
   height: var(--form-work-height);
   padding: 16px;
@@ -976,6 +975,37 @@ body.alliance-black-mode .progress-fill {
     rgba(255, 255, 255, 0.04);
   border: 1px solid var(--line);
   border-radius: 8px;
+}
+
+.results-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+  align-items: stretch;
+  justify-items: center;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.results-list.multiple-results {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+}
+
+.result-card {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto auto;
+  gap: 10px;
+  justify-items: center;
+  width: 100%;
+  min-height: 0;
+}
+
+.results-list.single-result .result-card {
+  height: 100%;
 }
 
 body.alliance-mode .preview-stage {
@@ -1014,6 +1044,16 @@ body.alliance-black-mode .preview-wrap::before {
   box-shadow: none;
 }
 
+.results-list.single-result .preview-wrap {
+  height: 100%;
+  width: auto;
+}
+
+.results-list.multiple-results .preview-wrap {
+  width: min(100%, 240px);
+  height: auto;
+}
+
 .preview-wrap::before {
   content: attr(data-placeholder);
   color: rgba(255, 255, 255, 0.22);
@@ -1021,12 +1061,19 @@ body.alliance-black-mode .preview-wrap::before {
   font-weight: 950;
 }
 
-#preview {
+.result-image {
   display: none;
   width: 100%;
   height: 100%;
   object-fit: contain;
   grid-area: 1 / 1;
+}
+
+.result-option-label {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1;
 }
 
 button,
@@ -1382,7 +1429,13 @@ body.alliance-lgbtq-mode .secondary-btn {
     min-height: 300px;
   }
 
-  .preview-wrap {
+  .results-list,
+  .results-list.multiple-results {
+    grid-template-columns: 1fr;
+  }
+
+  .results-list.single-result .preview-wrap,
+  .results-list.multiple-results .preview-wrap {
     width: min(100%, 500px);
     height: auto;
   }

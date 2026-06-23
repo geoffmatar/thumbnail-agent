@@ -313,7 +313,7 @@ def visual_brief_schema():
     }
 
 
-def create_visual_brief(script_text, title, config, has_person_reference=False):
+def create_visual_brief(script_text, title, config, has_person_reference=False, variant_index=1, variant_count=1):
     reference_note = ""
     if has_person_reference:
         reference_note = (
@@ -321,11 +321,19 @@ def create_visual_brief(script_text, title, config, has_person_reference=False):
             "The generated thumbnail must feature that exact person as the main human subject, preserving their recognizable face, "
             "hair, age, gender presentation, and overall appearance while placing them into the scene required by the script. "
         )
+    variant_note = ""
+    if variant_count > 1:
+        variant_note = (
+            f"This is thumbnail option {variant_index} of {variant_count}. "
+            "Make this option visually distinct in composition, setting, camera angle, color mood, and subject action from the other option, "
+            "while still following the same title, script, template, and subject-placement rules. "
+        )
     if not openai_key():
         return {
             "visual_prompt": (
                 "Create a vertical 9:16 full-frame editorial thumbnail image based on the script. "
                 f"{reference_note}"
+                f"{variant_note}"
                 f"No text, no captions, no logos, no black empty poster space. {focus_zone_prompt(config)}"
             ),
             "negative_prompt": "text, captions, watermarks, logos, blank black background, empty poster space",
@@ -356,6 +364,7 @@ def create_visual_brief(script_text, title, config, has_person_reference=False):
                             f"The final image must be full-frame 9:16 and fill the whole thumbnail behind a {config['template_context']}. "
                             "Avoid black voids, blank poster space, title-card layouts, or large empty areas. "
                             f"{reference_note}"
+                            f"{variant_note}"
                             f"{focus_zone_prompt(config)} "
                             "Keep the lower title area visually calmer but still image-filled.\n\n"
                             f"SCRIPT:\n{script_text[:14000]}"
@@ -557,53 +566,97 @@ def handle_create(script_text, title, subject_path=None, person_reference_path=N
     if not script_text.strip():
         raise RuntimeError("Paste the script first.")
 
-    if progress_callback:
-        progress_callback(12, "Reading the script and building the visual brief...")
-    brief = create_visual_brief(script_text, title, config, has_person_reference=bool(person_reference_path))
-    if progress_callback:
-        message = "Visual direction ready. Generating the subject image..."
-        if person_reference_path:
-            message = "Visual direction ready. Generating the subject image with the person reference..."
-        progress_callback(34, message)
-    used_ai = bool(openai_key())
-    if not subject_path:
-        if not used_ai and person_reference_path:
-            subject_path = person_reference_path
-        else:
-            try:
-                subject_path = generate_subject_image(brief, config, person_reference_path=person_reference_path)
-            except Exception as error:
-                if not person_reference_path:
-                    raise
-                subject_path = person_reference_path
-                used_ai = False
-                brief["rationale"] = (
-                    f"{brief.get('rationale', '')} Used the person reference photo directly because AI image generation failed: {error}"
-                ).strip()
-
-    if progress_callback:
-        progress_callback(82, f"Image generated. Applying the {config['display_name']} template and title...")
+    thumbnail_count = 2 if config["slug"] == "zoomex" else 1
     timestamp = time.strftime("%Y%m%d-%H%M%S")
-    output_path = GENERATED_DIR / f"{timestamp}-{config['slug']}-{safe_filename(title)}.png"
-    render_thumbnail(title, subject_path, output_path, config)
-    if progress_callback:
-        progress_callback(96, "Saving the finished thumbnail...")
+    metas = []
 
-    meta = {
-        "title": title,
-        "visual_prompt": brief["visual_prompt"],
-        "negative_prompt": brief.get("negative_prompt", ""),
-        "rationale": brief.get("rationale", ""),
-        "thumbnail": str(output_path),
-        "client": config["slug"],
-        "client_name": config["display_name"],
-        "design_asset": str(config["design_path"]),
-        "title_font": str(config["font_path"]),
-        "used_ai": used_ai,
-        "person_reference_used": bool(person_reference_path),
+    for index in range(thumbnail_count):
+        variant_index = index + 1
+        option_label = f"Option {variant_index}" if thumbnail_count > 1 else ""
+        span_start = 10 + int(index * 84 / thumbnail_count)
+        span_end = 10 + int((index + 1) * 84 / thumbnail_count)
+        span = max(1, span_end - span_start)
+
+        if progress_callback:
+            label = f" {variant_index}/{thumbnail_count}" if thumbnail_count > 1 else ""
+            progress_callback(span_start + max(1, int(span * 0.05)), f"Building visual brief{label}...")
+        brief = create_visual_brief(
+            script_text,
+            title,
+            config,
+            has_person_reference=bool(person_reference_path),
+            variant_index=variant_index,
+            variant_count=thumbnail_count,
+        )
+
+        if progress_callback:
+            label = f" {variant_index}/{thumbnail_count}" if thumbnail_count > 1 else ""
+            message = f"Visual direction ready. Generating subject image{label}..."
+            if person_reference_path:
+                message = f"Visual direction ready. Generating subject image{label} with the person reference..."
+            progress_callback(span_start + max(2, int(span * 0.25)), message)
+
+        used_ai = bool(openai_key())
+        current_subject_path = subject_path
+        if not current_subject_path:
+            if not used_ai and person_reference_path:
+                current_subject_path = person_reference_path
+            else:
+                try:
+                    current_subject_path = generate_subject_image(brief, config, person_reference_path=person_reference_path)
+                except Exception as error:
+                    if not person_reference_path:
+                        raise
+                    current_subject_path = person_reference_path
+                    used_ai = False
+                    brief["rationale"] = (
+                        f"{brief.get('rationale', '')} Used the person reference photo directly because AI image generation failed: {error}"
+                    ).strip()
+
+        if progress_callback:
+            label = f" {variant_index}/{thumbnail_count}" if thumbnail_count > 1 else ""
+            progress_callback(
+                span_start + max(3, int(span * 0.78)),
+                f"Image generated. Applying the {config['display_name']} template and title{label}...",
+            )
+
+        filename_suffix = f"-option-{variant_index}" if thumbnail_count > 1 else ""
+        output_path = GENERATED_DIR / f"{timestamp}-{config['slug']}-{safe_filename(title)}{filename_suffix}.png"
+        render_thumbnail(title, current_subject_path, output_path, config)
+
+        if progress_callback:
+            label = f" {variant_index}/{thumbnail_count}" if thumbnail_count > 1 else ""
+            progress_callback(span_start + max(4, int(span * 0.92)), f"Saving thumbnail{label}...")
+
+        meta = {
+            "title": title,
+            "visual_prompt": brief["visual_prompt"],
+            "negative_prompt": brief.get("negative_prompt", ""),
+            "rationale": brief.get("rationale", ""),
+            "thumbnail": str(output_path),
+            "client": config["slug"],
+            "client_name": config["display_name"],
+            "design_asset": str(config["design_path"]),
+            "title_font": str(config["font_path"]),
+            "used_ai": used_ai,
+            "person_reference_used": bool(person_reference_path),
+            "option_index": variant_index,
+            "option_count": thumbnail_count,
+            "option_label": option_label,
+        }
+        save_json(output_path.with_suffix(".json"), meta)
+        metas.append(meta)
+
+    primary = metas[0]
+    if thumbnail_count == 1:
+        return primary
+
+    return {
+        **primary,
+        "thumbnail": primary["thumbnail"],
+        "used_ai": any(item["used_ai"] for item in metas),
+        "thumbnails": metas,
     }
-    save_json(output_path.with_suffix(".json"), meta)
-    return meta
 
 
 def cleanup_jobs():
@@ -664,23 +717,44 @@ def run_create_job(job_id, script_text, title, person_reference_path=None, clien
             progress_callback=progress,
             client_slug=client_slug,
         )
-        thumbnail_name = Path(meta["thumbnail"]).name
+        source_thumbnails = meta.get("thumbnails") or [meta]
+        result_thumbnails = []
+        for item in source_thumbnails:
+            item_thumbnail_name = Path(item["thumbnail"]).name
+            result_thumbnails.append(
+                {
+                    "title": item["title"],
+                    "client": item["client"],
+                    "client_name": item["client_name"],
+                    "visual_prompt": item["visual_prompt"],
+                    "thumbnail_url": f"/generated/{item_thumbnail_name}",
+                    "download_url": f"/api/download/{item_thumbnail_name}",
+                    "filename": item_thumbnail_name,
+                    "used_ai": item["used_ai"],
+                    "person_reference_used": item.get("person_reference_used", False),
+                    "option_index": item.get("option_index", 1),
+                    "option_count": item.get("option_count", len(source_thumbnails)),
+                    "option_label": item.get("option_label", ""),
+                }
+            )
+        primary_result = result_thumbnails[0]
         result = {
             "title": meta["title"],
             "client": meta["client"],
             "client_name": meta["client_name"],
             "visual_prompt": meta["visual_prompt"],
-            "thumbnail_url": f"/generated/{thumbnail_name}",
-            "download_url": f"/api/download/{thumbnail_name}",
-            "filename": thumbnail_name,
+            "thumbnail_url": primary_result["thumbnail_url"],
+            "download_url": primary_result["download_url"],
+            "filename": primary_result["filename"],
             "used_ai": meta["used_ai"],
             "person_reference_used": meta.get("person_reference_used", False),
+            "thumbnails": result_thumbnails,
         }
         update_job(
             job_id,
             status="done",
             progress=100,
-            message="Done. Your thumbnail is ready.",
+            message="Done. Your thumbnails are ready." if len(result_thumbnails) > 1 else "Done. Your thumbnail is ready.",
             result=result,
             finished_at=time.time(),
         )
