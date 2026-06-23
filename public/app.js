@@ -192,18 +192,11 @@ function createResultCard(item, index, state, client) {
   wrap.appendChild(image);
   card.appendChild(wrap);
 
-  if (item?.option_label) {
-    const label = document.createElement("span");
-    label.className = "result-option-label";
-    label.textContent = item.option_label;
-    card.appendChild(label);
-  }
-
   const link = document.createElement("a");
   link.className = "secondary-btn result-download";
   link.href = item?.download_url || item?.thumbnail_url || "#";
   link.download = item?.filename || `thumbnail-${index + 1}.png`;
-  link.textContent = item?.option_label ? `Download ${item.option_label}` : "Download PNG";
+  link.textContent = "Download PNG";
   link.hidden = !item?.thumbnail_url;
   card.appendChild(link);
 

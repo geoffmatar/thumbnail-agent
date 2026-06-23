@@ -997,8 +997,8 @@ body.alliance-black-mode .progress-fill {
 
 .result-card {
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto auto;
-  gap: 10px;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 8px;
   justify-items: center;
   width: 100%;
   min-height: 0;
@@ -1069,13 +1069,6 @@ body.alliance-black-mode .preview-wrap::before {
   grid-area: 1 / 1;
 }
 
-.result-option-label {
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 800;
-  line-height: 1;
-}
-
 button,
 .secondary-btn {
   appearance: none;
@@ -1128,6 +1121,14 @@ body.alliance-black-mode .primary-btn {
   background: rgba(255, 255, 255, 0.08);
   color: var(--text);
   border: 1px solid var(--line);
+}
+
+.result-download {
+  min-height: 36px;
+  padding: 0 13px;
+  border-radius: 7px;
+  font-size: 13px;
+  line-height: 1;
 }
 
 body.alliance-mode .secondary-btn {
