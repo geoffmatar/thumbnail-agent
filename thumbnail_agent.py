@@ -138,6 +138,7 @@ CLIENTS = {
     },
 }
 DEFAULT_CLIENT = "zoomex"
+TWO_THUMBNAIL_CLIENTS = {"zoomex", "alliance-latin", "alliance-black", "alliance-lgbtq"}
 JOB_TTL_SECONDS = 60 * 60 * 3
 JOBS = {}
 JOBS_LOCK = threading.Lock()
@@ -566,7 +567,7 @@ def handle_create(script_text, title, subject_path=None, person_reference_path=N
     if not script_text.strip():
         raise RuntimeError("Paste the script first.")
 
-    thumbnail_count = 2 if config["slug"] == "zoomex" else 1
+    thumbnail_count = 2 if config["slug"] in TWO_THUMBNAIL_CLIENTS else 1
     timestamp = time.strftime("%Y%m%d-%H%M%S")
     metas = []
 
