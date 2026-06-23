@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import base64
+import concurrent.futures
 import io
 import json
 import mimetypes
@@ -569,18 +570,14 @@ def handle_create(script_text, title, subject_path=None, person_reference_path=N
 
     thumbnail_count = 2 if config["slug"] in TWO_THUMBNAIL_CLIENTS else 1
     timestamp = time.strftime("%Y%m%d-%H%M%S")
-    metas = []
 
-    for index in range(thumbnail_count):
+    def build_variant(index, show_detailed_progress=False):
         variant_index = index + 1
         option_label = f"Option {variant_index}" if thumbnail_count > 1 else ""
-        span_start = 10 + int(index * 84 / thumbnail_count)
-        span_end = 10 + int((index + 1) * 84 / thumbnail_count)
-        span = max(1, span_end - span_start)
 
-        if progress_callback:
+        if progress_callback and show_detailed_progress:
             label = f" {variant_index}/{thumbnail_count}" if thumbnail_count > 1 else ""
-            progress_callback(span_start + max(1, int(span * 0.05)), f"Building visual brief{label}...")
+            progress_callback(12, f"Building visual brief{label}...")
         brief = create_visual_brief(
             script_text,
             title,
@@ -590,12 +587,12 @@ def handle_create(script_text, title, subject_path=None, person_reference_path=N
             variant_count=thumbnail_count,
         )
 
-        if progress_callback:
+        if progress_callback and show_detailed_progress:
             label = f" {variant_index}/{thumbnail_count}" if thumbnail_count > 1 else ""
             message = f"Visual direction ready. Generating subject image{label}..."
             if person_reference_path:
                 message = f"Visual direction ready. Generating subject image{label} with the person reference..."
-            progress_callback(span_start + max(2, int(span * 0.25)), message)
+            progress_callback(34, message)
 
         used_ai = bool(openai_key())
         current_subject_path = subject_path
@@ -614,10 +611,10 @@ def handle_create(script_text, title, subject_path=None, person_reference_path=N
                         f"{brief.get('rationale', '')} Used the person reference photo directly because AI image generation failed: {error}"
                     ).strip()
 
-        if progress_callback:
+        if progress_callback and show_detailed_progress:
             label = f" {variant_index}/{thumbnail_count}" if thumbnail_count > 1 else ""
             progress_callback(
-                span_start + max(3, int(span * 0.78)),
+                82,
                 f"Image generated. Applying the {config['display_name']} template and title{label}...",
             )
 
@@ -625,9 +622,9 @@ def handle_create(script_text, title, subject_path=None, person_reference_path=N
         output_path = GENERATED_DIR / f"{timestamp}-{config['slug']}-{safe_filename(title)}{filename_suffix}.png"
         render_thumbnail(title, current_subject_path, output_path, config)
 
-        if progress_callback:
+        if progress_callback and show_detailed_progress:
             label = f" {variant_index}/{thumbnail_count}" if thumbnail_count > 1 else ""
-            progress_callback(span_start + max(4, int(span * 0.92)), f"Saving thumbnail{label}...")
+            progress_callback(96, f"Saving thumbnail{label}...")
 
         meta = {
             "title": title,
@@ -646,7 +643,35 @@ def handle_create(script_text, title, subject_path=None, person_reference_path=N
             "option_label": option_label,
         }
         save_json(output_path.with_suffix(".json"), meta)
-        metas.append(meta)
+        return meta
+
+    if thumbnail_count == 1:
+        metas = [build_variant(0, show_detailed_progress=True)]
+    else:
+        if progress_callback:
+            message = "Building two visual directions..."
+            if person_reference_path:
+                message = "Building two visual directions with the person reference..."
+            progress_callback(12, message)
+            progress_callback(34, "Generating both subject images at the same time...")
+
+        metas_by_index = [None] * thumbnail_count
+        completed_count = 0
+        with concurrent.futures.ThreadPoolExecutor(max_workers=thumbnail_count) as executor:
+            futures = {
+                executor.submit(build_variant, index): index
+                for index in range(thumbnail_count)
+            }
+            for future in concurrent.futures.as_completed(futures):
+                index = futures[future]
+                metas_by_index[index] = future.result()
+                completed_count += 1
+                if progress_callback and completed_count < thumbnail_count:
+                    progress_callback(62, "First thumbnail ready. Finishing the second...")
+
+        metas = metas_by_index
+        if progress_callback:
+            progress_callback(96, "Both thumbnails are ready. Saving results...")
 
     primary = metas[0]
     if thumbnail_count == 1:
