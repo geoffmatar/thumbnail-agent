@@ -33,6 +33,7 @@ GENERATED_DIR = APP_DIR / "generated"
 WORK_DIR = APP_DIR / "work"
 
 OPENAI_ENDPOINT = "https://api.openai.com/v1/responses"
+OPENAI_IMAGES_ENDPOINT = "https://api.openai.com/v1/images/generations"
 PUBLIC_ASSET_PATHS = {
     "/styles.css",
     "/app.js",
@@ -233,6 +234,10 @@ def openai_model():
     return os.environ.get("OPENAI_MODEL", "gpt-5.5")
 
 
+def openai_image_model():
+    return os.environ.get("OPENAI_IMAGE_MODEL", "gpt-image-1")
+
+
 def browser_key_setup_allowed():
     return False
 
@@ -251,13 +256,13 @@ def generated_file_path(filename):
     return GENERATED_DIR / Path(filename).name
 
 
-def openai_responses_create(payload, timeout=240):
+def openai_json_post(endpoint, payload, timeout=240):
     api_key = openai_key()
     if not api_key:
         raise RuntimeError("Add your OpenAI API key before generating thumbnails.")
 
     request = urllib.request.Request(
-        OPENAI_ENDPOINT,
+        endpoint,
         data=json.dumps(payload).encode("utf-8"),
         headers={
             "Authorization": f"Bearer {api_key}",
@@ -277,6 +282,14 @@ def openai_responses_create(payload, timeout=240):
         raise RuntimeError(f"OpenAI request failed: {message}") from error
 
 
+def openai_responses_create(payload, timeout=240):
+    return openai_json_post(OPENAI_ENDPOINT, payload, timeout)
+
+
+def openai_images_generate(payload, timeout=240):
+    return openai_json_post(OPENAI_IMAGES_ENDPOINT, payload, timeout)
+
+
 def extract_response_text(response):
     if isinstance(response.get("output_text"), str):
         return response["output_text"]
@@ -289,11 +302,83 @@ def extract_response_text(response):
     return "\n".join(chunks).strip()
 
 
-def extract_image_base64(response):
+def normalize_base64(value):
+    if not isinstance(value, str) or not value.strip():
+        return None
+    value = value.strip()
+    if value.startswith("data:image/") and "," in value:
+        value = value.split(",", 1)[1]
+    try:
+        base64.b64decode(value, validate=True)
+    except Exception:
+        return None
+    return value
+
+
+def download_image_bytes(url):
+    request = urllib.request.Request(url, headers={"User-Agent": "thumbnail-agent/1.0"})
+    with urllib.request.urlopen(request, timeout=90) as response:
+        return response.read()
+
+
+def extract_image_bytes(response):
     for item in response.get("output", []):
-        if item.get("type") == "image_generation_call" and item.get("result"):
-            return item["result"]
-    raise RuntimeError("The model did not return generated image data.")
+        if not isinstance(item, dict):
+            continue
+        if item.get("type") == "image_generation_call":
+            image_base64 = normalize_base64(item.get("result"))
+            if image_base64:
+                return base64.b64decode(image_base64)
+        for content in item.get("content", []):
+            if not isinstance(content, dict):
+                continue
+            image_base64 = normalize_base64(
+                content.get("b64_json")
+                or content.get("image_base64")
+                or content.get("image")
+                or content.get("data")
+            )
+            if image_base64:
+                return base64.b64decode(image_base64)
+            image_url = content.get("image_url") or content.get("url")
+            if isinstance(image_url, str):
+                image_base64 = normalize_base64(image_url)
+                if image_base64:
+                    return base64.b64decode(image_base64)
+                if image_url.startswith(("http://", "https://")):
+                    return download_image_bytes(image_url)
+
+    for image_item in response.get("data", []):
+        if not isinstance(image_item, dict):
+            continue
+        image_base64 = normalize_base64(image_item.get("b64_json"))
+        if image_base64:
+            return base64.b64decode(image_base64)
+        image_url = image_item.get("url")
+        if isinstance(image_url, str):
+            image_base64 = normalize_base64(image_url)
+            if image_base64:
+                return base64.b64decode(image_base64)
+            if image_url.startswith(("http://", "https://")):
+                return download_image_bytes(image_url)
+
+    response_text = extract_response_text(response)
+    detail = f" Response text: {response_text[:240]}" if response_text else ""
+    raise RuntimeError(f"The model did not return generated image data.{detail}")
+
+
+def generate_image_with_images_api(prompt):
+    payload = {
+        "model": openai_image_model(),
+        "prompt": prompt,
+        "size": "1024x1536",
+        "n": 1,
+    }
+    return extract_image_bytes(openai_images_generate(payload))
+
+
+def extract_image_base64(response):
+    return base64.b64encode(extract_image_bytes(response)).decode("ascii")
 
 
 def visual_brief_schema():
@@ -422,7 +507,17 @@ def generate_subject_image(brief, config, person_reference_path=None):
         "input": [{"role": "user", "content": content}],
         "tools": [{"type": "image_generation", "action": "generate"}],
     }
-    image_bytes = base64.b64decode(extract_image_base64(openai_responses_create(payload)))
+    try:
+        image_bytes = extract_image_bytes(openai_responses_create(payload))
+    except RuntimeError as responses_error:
+        if person_reference_path:
+            raise
+        try:
+            image_bytes = generate_image_with_images_api(prompt)
+        except RuntimeError as fallback_error:
+            raise RuntimeError(
+                f"{responses_error} Fallback image generation also failed: {fallback_error}"
+            ) from fallback_error
     image_path = WORK_DIR / f"subject-{uuid.uuid4().hex}.png"
     image_path.write_bytes(image_bytes)
     return image_path
