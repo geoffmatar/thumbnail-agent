@@ -174,6 +174,9 @@ def focus_zone_prompt(config=None):
         f"from x={x1} to {x2}, y={y1} to {y2} on a 1080x1920 canvas. "
         f"This square is between the {config['prompt_name']} logo area and the title bars. "
         "Faces, eyes, heads, products, vehicles, or the most important action must be centered in that square. "
+        "MANDATORY LIGHTING RULE: any main subject in this central square, including vehicles, robots, products, tools, or other key objects, "
+        "must be well-lit, cinematic, sharp, and clearly readable with visible surface detail, strong key light, and subtle rim or edge light. "
+        "Do not make the central subject dark, muddy, silhouetted, or low-contrast. "
         "MANDATORY HUMAN RULE: if any human appears, the face, eyes, head, shoulders, and upper half-body must be centered "
         f"inside this focus square, below the {config['prompt_name']} logo area. Faces must never sit above the logo height, near the top edge, "
         "or behind the logo. Use a centered half-body portrait composition for people whenever possible. "
@@ -338,7 +341,7 @@ def create_visual_brief(script_text, title, config, has_person_reference=False, 
                 f"{variant_note}"
                 f"No text, no captions, no logos, no black empty poster space. {focus_zone_prompt(config)}"
             ),
-            "negative_prompt": "text, captions, watermarks, logos, blank black background, empty poster space",
+            "negative_prompt": "text, captions, watermarks, logos, blank black background, empty poster space, dark central subject, underlit main object",
             "rationale": "Local fallback brief because OPENAI_API_KEY is not set.",
         }
 
@@ -352,6 +355,7 @@ def create_visual_brief(script_text, title, config, has_person_reference=False, 
                     "You create visual concepts for vertical social thumbnails. "
                     f"The title is supplied by the user and will be rendered later in fixed {config['prompt_name']} title bars. "
                     f"Human composition is strict: faces and upper half-bodies must be centered below the {config['prompt_name']} logo area, never above it. "
+                    "Central-subject lighting is strict: any main person, vehicle, robot, product, or key object must be well-lit, cinematic, and clearly readable. "
                     "Return only JSON matching the schema. Never include text, captions, or logos in the image prompt."
                 ),
             },
@@ -393,6 +397,8 @@ def generate_subject_image(brief, config, person_reference_path=None):
         "Hard requirements: vertical 9:16, full-bleed image, no text, no readable letters, no logos, no watermarks. "
         "The scene must fill the entire canvas from top to bottom. Do not make a mostly black image. "
         "Do not leave giant blank areas for text. Use real environment, texture, action, and depth behind the whole frame. "
+        "Any main central subject, including vehicles, robots, products, tools, or other key objects, must be well-lit, cinematic, sharp, and clearly readable; "
+        "avoid dark, muddy, silhouetted, or low-contrast central subjects. "
         f"If humans are present, the main face and upper half-body must be centered below the {config['prompt_name']} logo area; "
         "do not place any face above the logo height or near the top of the frame. "
         f"{focus_zone_prompt(config)} "
