@@ -8,6 +8,7 @@ import mimetypes
 import os
 import re
 import shutil
+import socket
 import sys
 import threading
 import time
@@ -280,6 +281,8 @@ def openai_json_post(endpoint, payload, timeout=240):
         except json.JSONDecodeError:
             message = body
         raise RuntimeError(f"OpenAI request failed: {message}") from error
+    except (TimeoutError, socket.timeout, urllib.error.URLError) as error:
+        raise RuntimeError(f"OpenAI request timed out or could not be reached: {error}") from error
 
 
 def openai_responses_create(payload, timeout=240):
@@ -374,7 +377,7 @@ def generate_image_with_images_api(prompt):
         "size": "1024x1536",
         "n": 1,
     }
-    return extract_image_bytes(openai_images_generate(payload))
+    return extract_image_bytes(openai_images_generate(payload, timeout=180))
 
 
 def extract_image_base64(response):
@@ -403,6 +406,21 @@ def visual_brief_schema():
     }
 
 
+def local_visual_brief(script_text, title, config, source_description, reference_note="", variant_note=""):
+    return {
+        "visual_prompt": (
+            f"Create a vertical 9:16 full-frame cinematic editorial thumbnail image for the title '{title}', "
+            f"based on the user's {source_description}. "
+            f"{reference_note}"
+            f"{variant_note}"
+            f"No text, no captions, no logos, no black empty poster space. {focus_zone_prompt(config)} "
+            f"User material: {script_text[:1200]}"
+        ),
+        "negative_prompt": "text, captions, watermarks, logos, blank black background, empty poster space, dark central subject, underlit main object",
+        "rationale": "Fallback visual brief used because the AI brief step was unavailable.",
+    }
+
+
 def create_visual_brief(script_text, title, config, has_person_reference=False, variant_index=1, variant_count=1, input_mode="script"):
     input_mode = "prompt" if input_mode == "prompt" else "script"
     source_label = "PROMPT" if input_mode == "prompt" else "SCRIPT"
@@ -423,16 +441,7 @@ def create_visual_brief(script_text, title, config, has_person_reference=False, 
             "while still following the same title, script, template, and subject-placement rules. "
         )
     if not openai_key():
-        return {
-            "visual_prompt": (
-                f"Create a vertical 9:16 full-frame editorial thumbnail image based on the user's {source_description}. "
-                f"{reference_note}"
-                f"{variant_note}"
-                f"No text, no captions, no logos, no black empty poster space. {focus_zone_prompt(config)}"
-            ),
-            "negative_prompt": "text, captions, watermarks, logos, blank black background, empty poster space, dark central subject, underlit main object",
-            "rationale": "Local fallback brief because OPENAI_API_KEY is not set.",
-        }
+        return local_visual_brief(script_text, title, config, source_description, reference_note, variant_note)
 
     payload = {
         "model": openai_model(),
@@ -478,7 +487,12 @@ def create_visual_brief(script_text, title, config, has_person_reference=False, 
             }
         },
     }
-    return json.loads(extract_response_text(openai_responses_create(payload)))
+    try:
+        return json.loads(extract_response_text(openai_responses_create(payload, timeout=75)))
+    except RuntimeError as error:
+        if "timed out" not in str(error).lower():
+            raise
+        return local_visual_brief(script_text, title, config, source_description, reference_note, variant_note)
 
 
 def generate_subject_image(brief, config, person_reference_path=None):
@@ -494,30 +508,25 @@ def generate_subject_image(brief, config, person_reference_path=None):
         f"{focus_zone_prompt(config)} "
         "Keep the area behind the title bars lower contrast but still visually present."
     )
+    if not person_reference_path:
+        image_bytes = generate_image_with_images_api(prompt)
+        image_path = WORK_DIR / f"subject-{uuid.uuid4().hex}.png"
+        image_path.write_bytes(image_bytes)
+        return image_path
+
     content = [{"type": "input_text", "text": prompt}]
-    if person_reference_path:
-        content.append({"type": "input_image", "image_url": image_data_url(person_reference_path)})
-        content[0]["text"] += (
-            "\n\nUse the attached person reference photo as the identity reference for the main human subject. "
-            "Preserve the person's recognizable facial identity and upper-body appearance, but place them naturally into the generated scene. "
-            "The uploaded photo is a reference only; do not recreate it as a flat pasted photo."
-        )
+    content.append({"type": "input_image", "image_url": image_data_url(person_reference_path)})
+    content[0]["text"] += (
+        "\n\nUse the attached person reference photo as the identity reference for the main human subject. "
+        "Preserve the person's recognizable facial identity and upper-body appearance, but place them naturally into the generated scene. "
+        "The uploaded photo is a reference only; do not recreate it as a flat pasted photo."
+    )
     payload = {
         "model": openai_model(),
         "input": [{"role": "user", "content": content}],
         "tools": [{"type": "image_generation", "action": "generate"}],
     }
-    try:
-        image_bytes = extract_image_bytes(openai_responses_create(payload))
-    except RuntimeError as responses_error:
-        if person_reference_path:
-            raise
-        try:
-            image_bytes = generate_image_with_images_api(prompt)
-        except RuntimeError as fallback_error:
-            raise RuntimeError(
-                f"{responses_error} Fallback image generation also failed: {fallback_error}"
-            ) from fallback_error
+    image_bytes = extract_image_bytes(openai_responses_create(payload, timeout=180))
     image_path = WORK_DIR / f"subject-{uuid.uuid4().hex}.png"
     image_path.write_bytes(image_bytes)
     return image_path
