@@ -629,10 +629,6 @@ body.alliance-black-mode #progressLabel {
   padding: 18px;
 }
 
-body.zoomex-mode .control-panel {
-  grid-template-rows: var(--form-top-height) 86px 260px 190px 126px;
-}
-
 .dropzone {
   display: grid;
   gap: 8px;
@@ -740,62 +736,6 @@ body.alliance-black-mode .dropzone {
   height: var(--form-top-height);
 }
 
-.input-mode-card {
-  grid-template-rows: auto minmax(0, 1fr);
-  min-height: 86px;
-  height: 86px;
-}
-
-.input-mode-options {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.input-mode-option {
-  position: relative;
-  display: grid;
-  place-items: center;
-  min-width: 0;
-  cursor: pointer;
-}
-
-.input-mode-option input {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.input-mode-option span {
-  display: inline-grid;
-  width: 100%;
-  min-height: 38px;
-  place-items: center;
-  padding: 0 13px;
-  color: rgba(245, 248, 244, 0.66);
-  background: rgba(0, 0, 0, 0.36);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 8px;
-  font-size: 16px;
-  font-weight: 750;
-  line-height: 1;
-  transition: border-color 180ms ease, background 180ms ease, color 180ms ease, box-shadow 180ms ease;
-}
-
-.input-mode-option input:checked + span {
-  color: var(--text);
-  background: rgba(18, 216, 195, 0.16);
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
-}
-
-body:not(.zoomex-mode) .input-mode-card,
-body:not(.zoomex-mode) .prompt-card {
-  display: none !important;
-}
-
 .dropzone small {
   color: var(--muted);
 }
@@ -868,36 +808,10 @@ textarea {
   line-height: 1.5;
 }
 
-textarea:disabled {
-  color: rgba(245, 248, 244, 0.42);
-  border-color: rgba(255, 255, 255, 0.1);
-  cursor: not-allowed;
-}
-
 .script-card {
   grid-template-rows: auto minmax(0, 1fr);
   min-height: calc(var(--form-work-height) - 142px);
   height: calc(var(--form-work-height) - 142px);
-}
-
-body.zoomex-mode .script-card {
-  min-height: 260px;
-  height: 260px;
-}
-
-.prompt-card {
-  grid-template-rows: auto minmax(0, 1fr);
-  min-height: 190px;
-  height: 190px;
-}
-
-.input-card-disabled {
-  opacity: 0.44;
-  filter: saturate(0.48);
-}
-
-.input-card-disabled textarea {
-  cursor: not-allowed;
 }
 
 .title-card input:focus,
@@ -1478,10 +1392,6 @@ body.alliance-lgbtq-mode .secondary-btn {
     grid-template-rows: auto;
   }
 
-  body.zoomex-mode .control-panel {
-    grid-template-rows: auto;
-  }
-
   .topbar {
     align-items: start;
     min-height: 0;
@@ -1501,19 +1411,11 @@ body.alliance-lgbtq-mode .secondary-btn {
   }
 
   .title-card,
-  .input-mode-card,
   .reference-card,
   .progress-panel,
   .create-panel,
   .script-card,
-  .prompt-card,
   .preview-stage {
-    height: auto;
-    min-height: 0;
-  }
-
-  body.zoomex-mode .script-card,
-  .prompt-card {
     height: auto;
     min-height: 0;
   }

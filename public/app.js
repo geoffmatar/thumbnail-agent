@@ -10,12 +10,7 @@ const statusLine = document.querySelector("#statusLine");
 const studioLogo = document.querySelector("#studioLogo");
 const studioTitle = document.querySelector("#studioTitle");
 const titleInput = document.querySelector("#titleInput");
-const inputModeCard = document.querySelector("#inputModeCard");
-const inputModeInputs = Array.from(document.querySelectorAll("input[name='inputMode']"));
-const scriptCard = document.querySelector("#scriptCard");
 const scriptText = document.querySelector("#scriptText");
-const promptCard = document.querySelector("#promptCard");
-const promptText = document.querySelector("#promptText");
 const personReference = document.querySelector("#personReference");
 const referenceFileName = document.querySelector("#referenceFileName");
 const resultsList = document.querySelector("#resultsList");
@@ -36,7 +31,6 @@ const clients = {
     alt: "ZOOMEX",
     title: "Thumbnail agent",
     placeholder: "ZOOMEX",
-    promptMode: true,
   },
   "alliance-latin": {
     slug: "alliance-latin",
@@ -45,7 +39,6 @@ const clients = {
     alt: "Alliance Latin Community",
     title: "Thumbnail agent",
     placeholder: "ALLIANCE",
-    promptMode: false,
   },
   "alliance-black": {
     slug: "alliance-black",
@@ -54,7 +47,6 @@ const clients = {
     alt: "Alliance Black Community",
     title: "Thumbnail agent",
     placeholder: "ALLIANCE",
-    promptMode: false,
   },
   "alliance-lgbtq": {
     slug: "alliance-lgbtq",
@@ -63,7 +55,6 @@ const clients = {
     alt: "Alliance LGBTQ+",
     title: "Thumbnail agent",
     placeholder: "ALLIANCE",
-    promptMode: false,
   },
 };
 
@@ -72,9 +63,7 @@ const clientStates = Object.fromEntries(
     slug,
     {
       title: "",
-      inputMode: "script",
       script: "",
-      prompt: "",
       personReferenceFile: null,
       progress: null,
       progressStartedAt: 0,
@@ -148,9 +137,6 @@ function syncCurrentFormState() {
   if (!state || zoomexView.hidden) return;
   state.title = titleInput.value;
   state.script = scriptText.value;
-  state.prompt = promptText.value;
-  const selectedMode = inputModeInputs.find((input) => input.checked)?.value;
-  if (selectedMode) state.inputMode = selectedMode;
 }
 
 function renderStatus(clientSlug = currentClient) {
@@ -174,36 +160,6 @@ function renderReferenceState(clientSlug = currentClient) {
   referenceFileName.textContent = state.personReferenceFile
     ? state.personReferenceFile.name
     : "Upload image";
-}
-
-function activeInputMode(clientSlug = currentClient) {
-  const client = clients[clientSlug];
-  const state = getClientState(clientSlug);
-  return client?.promptMode ? state.inputMode || "script" : "script";
-}
-
-function renderInputModeState(clientSlug = currentClient) {
-  if (clientSlug !== currentClient) return;
-  const client = clients[clientSlug];
-  const state = getClientState(clientSlug);
-  const promptModeEnabled = Boolean(client?.promptMode);
-  const mode = activeInputMode(clientSlug);
-
-  inputModeCard.hidden = !promptModeEnabled;
-  promptCard.hidden = !promptModeEnabled;
-
-  inputModeInputs.forEach((input) => {
-    input.checked = input.value === mode;
-  });
-
-  scriptCard.classList.toggle("input-card-disabled", promptModeEnabled && mode !== "script");
-  promptCard.classList.toggle("input-card-disabled", promptModeEnabled && mode !== "prompt");
-  scriptText.disabled = promptModeEnabled && mode !== "script";
-  promptText.disabled = !promptModeEnabled || mode !== "prompt";
-
-  if (!promptModeEnabled) {
-    state.inputMode = "script";
-  }
 }
 
 function resultItems(result) {
@@ -301,9 +257,7 @@ function renderProgress(clientSlug = currentClient) {
   progressLabel.textContent = progressState.message || "Creating thumbnail...";
 
   if (progressState.status === "idle") {
-    progressMeta.textContent = activeInputMode(clientSlug) === "prompt"
-      ? "Add a title and prompt, then create a thumbnail."
-      : "Add a title and script, then create a thumbnail.";
+    progressMeta.textContent = "Add a title and script, then create a thumbnail.";
   } else if (progressState.status === "done") {
     progressMeta.textContent = `Finished in ${formatDuration(elapsed)}`;
   } else if (progressState.status === "error") {
@@ -364,9 +318,7 @@ function hydrateClientState(clientSlug) {
   const state = getClientState(clientSlug);
   titleInput.value = state.title;
   scriptText.value = state.script;
-  promptText.value = state.prompt;
   personReference.value = "";
-  renderInputModeState(clientSlug);
   renderReferenceState(clientSlug);
   renderResultState(clientSlug);
   renderProgress(clientSlug);
@@ -445,15 +397,8 @@ async function createThumbnail() {
   }
 
   const script = scriptText.value.trim();
-  const prompt = promptText.value.trim();
-  const inputMode = activeInputMode(jobClient);
-  const sourceText = inputMode === "prompt" ? prompt : script;
-  if (!sourceText) {
-    setStatus(inputMode === "prompt" ? "Type a prompt first." : "Paste a script first.", true, jobClient);
-    if (inputMode === "prompt") {
-      promptText.focus();
-      return;
-    }
+  if (!script) {
+    setStatus("Paste a script first.", true, jobClient);
     scriptText.focus();
     return;
   }
@@ -461,9 +406,7 @@ async function createThumbnail() {
   const form = new FormData();
   form.append("client", jobClient);
   form.append("title", title);
-  form.append("input_mode", inputMode);
-  form.append("script", inputMode === "script" ? script : "");
-  form.append("prompt", inputMode === "prompt" ? prompt : "");
+  form.append("script", script);
   if (state.personReferenceFile) {
     form.append("person_reference", state.personReferenceFile);
   }
@@ -518,18 +461,6 @@ titleInput.addEventListener("input", () => {
 });
 scriptText.addEventListener("input", () => {
   getClientState().script = scriptText.value;
-});
-promptText.addEventListener("input", () => {
-  getClientState().prompt = promptText.value;
-});
-inputModeInputs.forEach((input) => {
-  input.addEventListener("change", () => {
-    if (!input.checked) return;
-    const state = getClientState();
-    state.inputMode = input.value;
-    renderInputModeState();
-    renderProgress();
-  });
 });
 personReference.addEventListener("change", updateReferenceFileName);
 resultsList.addEventListener("click", downloadThumbnail);

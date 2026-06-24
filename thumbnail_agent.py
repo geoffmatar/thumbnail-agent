@@ -8,7 +8,6 @@ import mimetypes
 import os
 import re
 import shutil
-import socket
 import sys
 import threading
 import time
@@ -34,7 +33,6 @@ GENERATED_DIR = APP_DIR / "generated"
 WORK_DIR = APP_DIR / "work"
 
 OPENAI_ENDPOINT = "https://api.openai.com/v1/responses"
-OPENAI_IMAGES_ENDPOINT = "https://api.openai.com/v1/images/generations"
 PUBLIC_ASSET_PATHS = {
     "/styles.css",
     "/app.js",
@@ -145,13 +143,6 @@ TWO_THUMBNAIL_CLIENTS = {"zoomex", "alliance-latin", "alliance-black", "alliance
 JOB_TTL_SECONDS = 60 * 60 * 3
 JOBS = {}
 JOBS_LOCK = threading.Lock()
-SAFETY_ERROR_MARKERS = (
-    "rejected by the safety system",
-    "safety system",
-    "safety",
-    "content policy",
-    "policy",
-)
 
 
 def get_client_config(client_slug):
@@ -242,15 +233,6 @@ def openai_model():
     return os.environ.get("OPENAI_MODEL", "gpt-5.5")
 
 
-def openai_image_model():
-    return os.environ.get("OPENAI_IMAGE_MODEL", "gpt-image-1")
-
-
-def is_safety_rejection(error):
-    message = str(error).lower()
-    return any(marker in message for marker in SAFETY_ERROR_MARKERS)
-
-
 def browser_key_setup_allowed():
     return False
 
@@ -269,13 +251,13 @@ def generated_file_path(filename):
     return GENERATED_DIR / Path(filename).name
 
 
-def openai_json_post(endpoint, payload, timeout=240):
+def openai_responses_create(payload, timeout=240):
     api_key = openai_key()
     if not api_key:
         raise RuntimeError("Add your OpenAI API key before generating thumbnails.")
 
     request = urllib.request.Request(
-        endpoint,
+        OPENAI_ENDPOINT,
         data=json.dumps(payload).encode("utf-8"),
         headers={
             "Authorization": f"Bearer {api_key}",
@@ -293,16 +275,6 @@ def openai_json_post(endpoint, payload, timeout=240):
         except json.JSONDecodeError:
             message = body
         raise RuntimeError(f"OpenAI request failed: {message}") from error
-    except (TimeoutError, socket.timeout, urllib.error.URLError) as error:
-        raise RuntimeError(f"OpenAI request timed out or could not be reached: {error}") from error
-
-
-def openai_responses_create(payload, timeout=240):
-    return openai_json_post(OPENAI_ENDPOINT, payload, timeout)
-
-
-def openai_images_generate(payload, timeout=240):
-    return openai_json_post(OPENAI_IMAGES_ENDPOINT, payload, timeout)
 
 
 def extract_response_text(response):
@@ -317,107 +289,11 @@ def extract_response_text(response):
     return "\n".join(chunks).strip()
 
 
-def normalize_base64(value):
-    if not isinstance(value, str) or not value.strip():
-        return None
-    value = value.strip()
-    if value.startswith("data:image/") and "," in value:
-        value = value.split(",", 1)[1]
-    try:
-        base64.b64decode(value, validate=True)
-    except Exception:
-        return None
-    return value
-
-
-def download_image_bytes(url):
-    request = urllib.request.Request(url, headers={"User-Agent": "thumbnail-agent/1.0"})
-    with urllib.request.urlopen(request, timeout=90) as response:
-        return response.read()
-
-
-def extract_image_bytes(response):
-    for item in response.get("output", []):
-        if not isinstance(item, dict):
-            continue
-        if item.get("type") == "image_generation_call":
-            image_base64 = normalize_base64(item.get("result"))
-            if image_base64:
-                return base64.b64decode(image_base64)
-        for content in item.get("content", []):
-            if not isinstance(content, dict):
-                continue
-            image_base64 = normalize_base64(
-                content.get("b64_json")
-                or content.get("image_base64")
-                or content.get("image")
-                or content.get("data")
-            )
-            if image_base64:
-                return base64.b64decode(image_base64)
-            image_url = content.get("image_url") or content.get("url")
-            if isinstance(image_url, str):
-                image_base64 = normalize_base64(image_url)
-                if image_base64:
-                    return base64.b64decode(image_base64)
-                if image_url.startswith(("http://", "https://")):
-                    return download_image_bytes(image_url)
-
-    for image_item in response.get("data", []):
-        if not isinstance(image_item, dict):
-            continue
-        image_base64 = normalize_base64(image_item.get("b64_json"))
-        if image_base64:
-            return base64.b64decode(image_base64)
-        image_url = image_item.get("url")
-        if isinstance(image_url, str):
-            image_base64 = normalize_base64(image_url)
-            if image_base64:
-                return base64.b64decode(image_base64)
-            if image_url.startswith(("http://", "https://")):
-                return download_image_bytes(image_url)
-
-    response_text = extract_response_text(response)
-    detail = f" Response text: {response_text[:240]}" if response_text else ""
-    raise RuntimeError(f"The model did not return generated image data.{detail}")
-
-
-def safety_fallback_image_prompt(title, config):
-    return (
-        f"Create a brand-safe vertical 9:16 cinematic editorial thumbnail background for the title '{title}'. "
-        "Use a symbolic, non-graphic scene instead of literal risky content: a dramatic well-lit central object, "
-        "environment, metaphor, newsroom-style visual, arena, desk, document, vehicle, product, technology object, or abstract action cue. "
-        "Do not depict real people, identifiable public figures, private individuals, minors, weapons, blood, injury, gore, hate symbols, "
-        "explicit content, illegal acts, or distressing scenes. "
-        "No text, no captions, no readable letters, no logos, no watermarks. "
-        f"Make it full-bleed and compatible with the fixed {config['prompt_name']} thumbnail design. "
-        f"{focus_zone_prompt(config)}"
-    )
-
-
-def generate_image_with_images_api(prompt, fallback_prompt=None):
-    payload = {
-        "model": openai_image_model(),
-        "prompt": prompt,
-        "size": "1024x1536",
-        "n": 1,
-    }
-    try:
-        return extract_image_bytes(openai_images_generate(payload, timeout=180))
-    except RuntimeError as error:
-        if not fallback_prompt or not is_safety_rejection(error):
-            raise
-        fallback_payload = {**payload, "prompt": fallback_prompt}
-        try:
-            return extract_image_bytes(openai_images_generate(fallback_payload, timeout=180))
-        except RuntimeError as fallback_error:
-            raise RuntimeError(
-                f"OpenAI rejected the original image prompt, then the safer fallback also failed: {fallback_error}"
-            ) from fallback_error
-
-
 def extract_image_base64(response):
-    return base64.b64encode(extract_image_bytes(response)).decode("ascii")
+    for item in response.get("output", []):
+        if item.get("type") == "image_generation_call" and item.get("result"):
+            return item["result"]
+    raise RuntimeError("The model did not return generated image data.")
 
 
 def visual_brief_schema():
@@ -442,32 +318,13 @@ def visual_brief_schema():
     }
 
 
-def local_visual_brief(script_text, title, config, source_description, reference_note="", variant_note=""):
-    return {
-        "visual_prompt": (
-            f"Create a vertical 9:16 full-frame cinematic editorial thumbnail image for the title '{title}', "
-            f"based on the user's {source_description}. "
-            f"{reference_note}"
-            f"{variant_note}"
-            f"No text, no captions, no logos, no black empty poster space. {focus_zone_prompt(config)} "
-            f"User material: {script_text[:1200]}"
-        ),
-        "negative_prompt": "text, captions, watermarks, logos, blank black background, empty poster space, dark central subject, underlit main object",
-        "rationale": "Fallback visual brief used because the AI brief step was unavailable.",
-    }
-
-
-def create_visual_brief(script_text, title, config, has_person_reference=False, variant_index=1, variant_count=1, input_mode="script"):
-    input_mode = "prompt" if input_mode == "prompt" else "script"
-    source_label = "PROMPT" if input_mode == "prompt" else "SCRIPT"
-    source_description = "direct creative prompt" if input_mode == "prompt" else "script"
-    prompt_mode_note = "Follow the user's requested visual direction directly. " if input_mode == "prompt" else ""
+def create_visual_brief(script_text, title, config, has_person_reference=False, variant_index=1, variant_count=1):
     reference_note = ""
     if has_person_reference:
         reference_note = (
             "A person reference photo will be supplied to the image generator. "
             "The generated thumbnail must feature that exact person as the main human subject, preserving their recognizable face, "
-            f"hair, age, gender presentation, and overall appearance while placing them into the scene required by the {source_description}. "
+            "hair, age, gender presentation, and overall appearance while placing them into the scene required by the script. "
         )
     variant_note = ""
     if variant_count > 1:
@@ -477,7 +334,16 @@ def create_visual_brief(script_text, title, config, has_person_reference=False, 
             "while still following the same title, script, template, and subject-placement rules. "
         )
     if not openai_key():
-        return local_visual_brief(script_text, title, config, source_description, reference_note, variant_note)
+        return {
+            "visual_prompt": (
+                "Create a vertical 9:16 full-frame editorial thumbnail image based on the script. "
+                f"{reference_note}"
+                f"{variant_note}"
+                f"No text, no captions, no logos, no black empty poster space. {focus_zone_prompt(config)}"
+            ),
+            "negative_prompt": "text, captions, watermarks, logos, blank black background, empty poster space, dark central subject, underlit main object",
+            "rationale": "Local fallback brief because OPENAI_API_KEY is not set.",
+        }
 
     payload = {
         "model": openai_model(),
@@ -500,15 +366,14 @@ def create_visual_brief(script_text, title, config, has_person_reference=False, 
                         "type": "input_text",
                         "text": (
                             f"TITLE: {title}\n\n"
-                            f"Create only the subject/background image prompt from this {source_description}. "
-                            f"{prompt_mode_note}"
+                            "Create only the subject/background image prompt for this script. "
                             f"The final image must be full-frame 9:16 and fill the whole thumbnail behind a {config['template_context']}. "
                             "Avoid black voids, blank poster space, title-card layouts, or large empty areas. "
                             f"{reference_note}"
                             f"{variant_note}"
                             f"{focus_zone_prompt(config)} "
                             "Keep the lower title area visually calmer but still image-filled.\n\n"
-                            f"{source_label}:\n{script_text[:14000]}"
+                            f"SCRIPT:\n{script_text[:14000]}"
                         ),
                     }
                 ],
@@ -523,15 +388,10 @@ def create_visual_brief(script_text, title, config, has_person_reference=False, 
             }
         },
     }
-    try:
-        return json.loads(extract_response_text(openai_responses_create(payload, timeout=75)))
-    except RuntimeError as error:
-        if "timed out" not in str(error).lower():
-            raise
-        return local_visual_brief(script_text, title, config, source_description, reference_note, variant_note)
+    return json.loads(extract_response_text(openai_responses_create(payload)))
 
 
-def generate_subject_image(brief, config, person_reference_path=None, title=""):
+def generate_subject_image(brief, config, person_reference_path=None):
     prompt = (
         f"{brief['visual_prompt']}\n\n"
         "Hard requirements: vertical 9:16, full-bleed image, no text, no readable letters, no logos, no watermarks. "
@@ -544,28 +404,20 @@ def generate_subject_image(brief, config, person_reference_path=None, title=""):
         f"{focus_zone_prompt(config)} "
         "Keep the area behind the title bars lower contrast but still visually present."
     )
-    if not person_reference_path:
-        image_bytes = generate_image_with_images_api(
-            prompt,
-            fallback_prompt=safety_fallback_image_prompt(title or "thumbnail", config),
-        )
-        image_path = WORK_DIR / f"subject-{uuid.uuid4().hex}.png"
-        image_path.write_bytes(image_bytes)
-        return image_path
-
     content = [{"type": "input_text", "text": prompt}]
-    content.append({"type": "input_image", "image_url": image_data_url(person_reference_path)})
-    content[0]["text"] += (
-        "\n\nUse the attached person reference photo as the identity reference for the main human subject. "
-        "Preserve the person's recognizable facial identity and upper-body appearance, but place them naturally into the generated scene. "
-        "The uploaded photo is a reference only; do not recreate it as a flat pasted photo."
-    )
+    if person_reference_path:
+        content.append({"type": "input_image", "image_url": image_data_url(person_reference_path)})
+        content[0]["text"] += (
+            "\n\nUse the attached person reference photo as the identity reference for the main human subject. "
+            "Preserve the person's recognizable facial identity and upper-body appearance, but place them naturally into the generated scene. "
+            "The uploaded photo is a reference only; do not recreate it as a flat pasted photo."
+        )
     payload = {
         "model": openai_model(),
         "input": [{"role": "user", "content": content}],
         "tools": [{"type": "image_generation", "action": "generate"}],
     }
-    image_bytes = extract_image_bytes(openai_responses_create(payload, timeout=180))
+    image_bytes = base64.b64decode(extract_image_base64(openai_responses_create(payload)))
     image_path = WORK_DIR / f"subject-{uuid.uuid4().hex}.png"
     image_path.write_bytes(image_bytes)
     return image_path
@@ -713,15 +565,14 @@ def image_data_url(path):
     return f"data:image/jpeg;base64,{encoded}"
 
 
-def handle_create(script_text, title, subject_path=None, person_reference_path=None, progress_callback=None, client_slug=DEFAULT_CLIENT, input_mode="script"):
+def handle_create(script_text, title, subject_path=None, person_reference_path=None, progress_callback=None, client_slug=DEFAULT_CLIENT):
     ensure_dirs()
     config = get_client_config(client_slug)
-    input_mode = "prompt" if config["slug"] == "zoomex" and input_mode == "prompt" else "script"
     title = title.strip()
     if not title:
         raise RuntimeError("Add the thumbnail title first.")
     if not script_text.strip():
-        raise RuntimeError("Type a prompt first." if input_mode == "prompt" else "Paste the script first.")
+        raise RuntimeError("Paste the script first.")
 
     thumbnail_count = 2 if config["slug"] in TWO_THUMBNAIL_CLIENTS else 1
     timestamp = time.strftime("%Y%m%d-%H%M%S")
@@ -740,7 +591,6 @@ def handle_create(script_text, title, subject_path=None, person_reference_path=N
             has_person_reference=bool(person_reference_path),
             variant_index=variant_index,
             variant_count=thumbnail_count,
-            input_mode=input_mode,
         )
 
         if progress_callback and show_detailed_progress:
@@ -757,12 +607,7 @@ def handle_create(script_text, title, subject_path=None, person_reference_path=N
                 current_subject_path = person_reference_path
             else:
                 try:
-                    current_subject_path = generate_subject_image(
-                        brief,
-                        config,
-                        person_reference_path=person_reference_path,
-                        title=title,
-                    )
+                    current_subject_path = generate_subject_image(brief, config, person_reference_path=person_reference_path)
                 except Exception as error:
                     if not person_reference_path:
                         raise
@@ -799,7 +644,6 @@ def handle_create(script_text, title, subject_path=None, person_reference_path=N
             "title_font": str(config["font_path"]),
             "used_ai": used_ai,
             "person_reference_used": bool(person_reference_path),
-            "input_mode": input_mode,
             "option_index": variant_index,
             "option_count": thumbnail_count,
             "option_label": option_label,
@@ -892,7 +736,7 @@ def get_job(job_id):
         return public_job(job) if job else None
 
 
-def run_create_job(job_id, script_text, title, person_reference_path=None, client_slug=DEFAULT_CLIENT, input_mode="script"):
+def run_create_job(job_id, script_text, title, person_reference_path=None, client_slug=DEFAULT_CLIENT):
     def progress(progress_value, message):
         update_job(job_id, status="running", progress=progress_value, message=message)
 
@@ -904,7 +748,6 @@ def run_create_job(job_id, script_text, title, person_reference_path=None, clien
             person_reference_path=person_reference_path,
             progress_callback=progress,
             client_slug=client_slug,
-            input_mode=input_mode,
         )
         source_thumbnails = meta.get("thumbnails") or [meta]
         result_thumbnails = []
@@ -921,7 +764,6 @@ def run_create_job(job_id, script_text, title, person_reference_path=None, clien
                     "filename": item_thumbnail_name,
                     "used_ai": item["used_ai"],
                     "person_reference_used": item.get("person_reference_used", False),
-                    "input_mode": item.get("input_mode", "script"),
                     "option_index": item.get("option_index", 1),
                     "option_count": item.get("option_count", len(source_thumbnails)),
                     "option_label": item.get("option_label", ""),
@@ -938,7 +780,6 @@ def run_create_job(job_id, script_text, title, person_reference_path=None, clien
             "filename": primary_result["filename"],
             "used_ai": meta["used_ai"],
             "person_reference_used": meta.get("person_reference_used", False),
-            "input_mode": meta.get("input_mode", "script"),
             "thumbnails": result_thumbnails,
         }
         update_job(
@@ -960,7 +801,7 @@ def run_create_job(job_id, script_text, title, person_reference_path=None, clien
         )
 
 
-def start_create_job(script_text, title, person_reference_path=None, client_slug=DEFAULT_CLIENT, input_mode="script"):
+def start_create_job(script_text, title, person_reference_path=None, client_slug=DEFAULT_CLIENT):
     cleanup_jobs()
     job_id = uuid.uuid4().hex
     now = time.time()
@@ -978,7 +819,7 @@ def start_create_job(script_text, title, person_reference_path=None, client_slug
         }
     thread = threading.Thread(
         target=run_create_job,
-        args=(job_id, script_text, title, person_reference_path, client_slug, input_mode),
+        args=(job_id, script_text, title, person_reference_path, client_slug),
         daemon=True,
     )
     thread.start()
@@ -1100,21 +941,15 @@ class ThumbnailHandler(BaseHTTPRequestHandler):
 
             title = field_value(form, "title").strip()
             script_text = field_value(form, "script").strip()
-            prompt_text = field_value(form, "prompt").strip()
-            input_mode = field_value(form, "input_mode", "script").strip().lower()
             client_slug = field_value(form, "client", DEFAULT_CLIENT).strip() or DEFAULT_CLIENT
             try:
-                config = get_client_config(client_slug)
+                get_client_config(client_slug)
             except RuntimeError as error:
                 return self.send_json({"error": str(error)}, 400)
-            if config["slug"] != "zoomex" or input_mode not in {"script", "prompt"}:
-                input_mode = "script"
-            source_text = prompt_text if input_mode == "prompt" else script_text
             if not title:
                 return self.send_json({"error": "Add the thumbnail title first."}, 400)
-            if not source_text:
-                message = "Type a prompt first." if input_mode == "prompt" else "Paste the script first."
-                return self.send_json({"error": message}, 400)
+            if not script_text:
+                return self.send_json({"error": "Paste the script first."}, 400)
 
             person_reference_path = save_upload(
                 form["person_reference"] if "person_reference" in form else None,
@@ -1123,11 +958,10 @@ class ThumbnailHandler(BaseHTTPRequestHandler):
             )
 
             job_id = start_create_job(
-                script_text=source_text,
+                script_text=script_text,
                 title=title,
                 person_reference_path=person_reference_path,
                 client_slug=client_slug,
-                input_mode=input_mode,
             )
             return self.send_json(
                 {
