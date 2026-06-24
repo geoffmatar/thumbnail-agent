@@ -195,9 +195,28 @@
               </label>
             </div>
 
-            <div class="dropzone script-card">
+            <div id="inputModeCard" class="dropzone input-mode-card" hidden>
+              <span>Source</span>
+              <div class="input-mode-options" role="radiogroup" aria-label="Creative source">
+                <label class="input-mode-option">
+                  <input type="radio" name="inputMode" value="script" checked>
+                  <span>Script</span>
+                </label>
+                <label class="input-mode-option">
+                  <input type="radio" name="inputMode" value="prompt">
+                  <span>Prompt</span>
+                </label>
+              </div>
+            </div>
+
+            <div id="scriptCard" class="dropzone script-card">
               <span>Script</span>
               <textarea id="scriptText" rows="15" placeholder="Paste your script here..."></textarea>
+            </div>
+
+            <div id="promptCard" class="dropzone prompt-card" hidden>
+              <span>Prompt</span>
+              <textarea id="promptText" rows="7" placeholder="Describe what you want in the thumbnail..."></textarea>
             </div>
 
             <label class="dropzone reference-card" for="personReference">

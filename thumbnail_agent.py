@@ -318,13 +318,17 @@ def visual_brief_schema():
     }
 
 
-def create_visual_brief(script_text, title, config, has_person_reference=False, variant_index=1, variant_count=1):
+def create_visual_brief(script_text, title, config, has_person_reference=False, variant_index=1, variant_count=1, input_mode="script"):
+    input_mode = "prompt" if input_mode == "prompt" else "script"
+    source_label = "PROMPT" if input_mode == "prompt" else "SCRIPT"
+    source_description = "direct creative prompt" if input_mode == "prompt" else "script"
+    prompt_mode_note = "Follow the user's requested visual direction directly. " if input_mode == "prompt" else ""
     reference_note = ""
     if has_person_reference:
         reference_note = (
             "A person reference photo will be supplied to the image generator. "
             "The generated thumbnail must feature that exact person as the main human subject, preserving their recognizable face, "
-            "hair, age, gender presentation, and overall appearance while placing them into the scene required by the script. "
+            f"hair, age, gender presentation, and overall appearance while placing them into the scene required by the {source_description}. "
         )
     variant_note = ""
     if variant_count > 1:
@@ -336,7 +340,7 @@ def create_visual_brief(script_text, title, config, has_person_reference=False, 
     if not openai_key():
         return {
             "visual_prompt": (
-                "Create a vertical 9:16 full-frame editorial thumbnail image based on the script. "
+                f"Create a vertical 9:16 full-frame editorial thumbnail image based on the user's {source_description}. "
                 f"{reference_note}"
                 f"{variant_note}"
                 f"No text, no captions, no logos, no black empty poster space. {focus_zone_prompt(config)}"
@@ -366,14 +370,15 @@ def create_visual_brief(script_text, title, config, has_person_reference=False, 
                         "type": "input_text",
                         "text": (
                             f"TITLE: {title}\n\n"
-                            "Create only the subject/background image prompt for this script. "
+                            f"Create only the subject/background image prompt from this {source_description}. "
+                            f"{prompt_mode_note}"
                             f"The final image must be full-frame 9:16 and fill the whole thumbnail behind a {config['template_context']}. "
                             "Avoid black voids, blank poster space, title-card layouts, or large empty areas. "
                             f"{reference_note}"
                             f"{variant_note}"
                             f"{focus_zone_prompt(config)} "
                             "Keep the lower title area visually calmer but still image-filled.\n\n"
-                            f"SCRIPT:\n{script_text[:14000]}"
+                            f"{source_label}:\n{script_text[:14000]}"
                         ),
                     }
                 ],
@@ -565,14 +570,15 @@ def image_data_url(path):
     return f"data:image/jpeg;base64,{encoded}"
 
 
-def handle_create(script_text, title, subject_path=None, person_reference_path=None, progress_callback=None, client_slug=DEFAULT_CLIENT):
+def handle_create(script_text, title, subject_path=None, person_reference_path=None, progress_callback=None, client_slug=DEFAULT_CLIENT, input_mode="script"):
     ensure_dirs()
     config = get_client_config(client_slug)
+    input_mode = "prompt" if config["slug"] == "zoomex" and input_mode == "prompt" else "script"
     title = title.strip()
     if not title:
         raise RuntimeError("Add the thumbnail title first.")
     if not script_text.strip():
-        raise RuntimeError("Paste the script first.")
+        raise RuntimeError("Type a prompt first." if input_mode == "prompt" else "Paste the script first.")
 
     thumbnail_count = 2 if config["slug"] in TWO_THUMBNAIL_CLIENTS else 1
     timestamp = time.strftime("%Y%m%d-%H%M%S")
@@ -591,6 +597,7 @@ def handle_create(script_text, title, subject_path=None, person_reference_path=N
             has_person_reference=bool(person_reference_path),
             variant_index=variant_index,
             variant_count=thumbnail_count,
+            input_mode=input_mode,
         )
 
         if progress_callback and show_detailed_progress:
@@ -644,6 +651,7 @@ def handle_create(script_text, title, subject_path=None, person_reference_path=N
             "title_font": str(config["font_path"]),
             "used_ai": used_ai,
             "person_reference_used": bool(person_reference_path),
+            "input_mode": input_mode,
             "option_index": variant_index,
             "option_count": thumbnail_count,
             "option_label": option_label,
@@ -736,7 +744,7 @@ def get_job(job_id):
         return public_job(job) if job else None
 
 
-def run_create_job(job_id, script_text, title, person_reference_path=None, client_slug=DEFAULT_CLIENT):
+def run_create_job(job_id, script_text, title, person_reference_path=None, client_slug=DEFAULT_CLIENT, input_mode="script"):
     def progress(progress_value, message):
         update_job(job_id, status="running", progress=progress_value, message=message)
 
@@ -748,6 +756,7 @@ def run_create_job(job_id, script_text, title, person_reference_path=None, clien
             person_reference_path=person_reference_path,
             progress_callback=progress,
             client_slug=client_slug,
+            input_mode=input_mode,
         )
         source_thumbnails = meta.get("thumbnails") or [meta]
         result_thumbnails = []
@@ -764,6 +773,7 @@ def run_create_job(job_id, script_text, title, person_reference_path=None, clien
                     "filename": item_thumbnail_name,
                     "used_ai": item["used_ai"],
                     "person_reference_used": item.get("person_reference_used", False),
+                    "input_mode": item.get("input_mode", "script"),
                     "option_index": item.get("option_index", 1),
                     "option_count": item.get("option_count", len(source_thumbnails)),
                     "option_label": item.get("option_label", ""),
@@ -780,6 +790,7 @@ def run_create_job(job_id, script_text, title, person_reference_path=None, clien
             "filename": primary_result["filename"],
             "used_ai": meta["used_ai"],
             "person_reference_used": meta.get("person_reference_used", False),
+            "input_mode": meta.get("input_mode", "script"),
             "thumbnails": result_thumbnails,
         }
         update_job(
@@ -801,7 +812,7 @@ def run_create_job(job_id, script_text, title, person_reference_path=None, clien
         )
 
 
-def start_create_job(script_text, title, person_reference_path=None, client_slug=DEFAULT_CLIENT):
+def start_create_job(script_text, title, person_reference_path=None, client_slug=DEFAULT_CLIENT, input_mode="script"):
     cleanup_jobs()
     job_id = uuid.uuid4().hex
     now = time.time()
@@ -819,7 +830,7 @@ def start_create_job(script_text, title, person_reference_path=None, client_slug
         }
     thread = threading.Thread(
         target=run_create_job,
-        args=(job_id, script_text, title, person_reference_path, client_slug),
+        args=(job_id, script_text, title, person_reference_path, client_slug, input_mode),
         daemon=True,
     )
     thread.start()
@@ -941,15 +952,21 @@ class ThumbnailHandler(BaseHTTPRequestHandler):
 
             title = field_value(form, "title").strip()
             script_text = field_value(form, "script").strip()
+            prompt_text = field_value(form, "prompt").strip()
+            input_mode = field_value(form, "input_mode", "script").strip().lower()
             client_slug = field_value(form, "client", DEFAULT_CLIENT).strip() or DEFAULT_CLIENT
             try:
-                get_client_config(client_slug)
+                config = get_client_config(client_slug)
             except RuntimeError as error:
                 return self.send_json({"error": str(error)}, 400)
+            if config["slug"] != "zoomex" or input_mode not in {"script", "prompt"}:
+                input_mode = "script"
+            source_text = prompt_text if input_mode == "prompt" else script_text
             if not title:
                 return self.send_json({"error": "Add the thumbnail title first."}, 400)
-            if not script_text:
-                return self.send_json({"error": "Paste the script first."}, 400)
+            if not source_text:
+                message = "Type a prompt first." if input_mode == "prompt" else "Paste the script first."
+                return self.send_json({"error": message}, 400)
 
             person_reference_path = save_upload(
                 form["person_reference"] if "person_reference" in form else None,
@@ -958,10 +975,11 @@ class ThumbnailHandler(BaseHTTPRequestHandler):
             )
 
             job_id = start_create_job(
-                script_text=script_text,
+                script_text=source_text,
                 title=title,
                 person_reference_path=person_reference_path,
                 client_slug=client_slug,
+                input_mode=input_mode,
             )
             return self.send_json(
                 {
