@@ -145,6 +145,13 @@ TWO_THUMBNAIL_CLIENTS = {"zoomex", "alliance-latin", "alliance-black", "alliance
 JOB_TTL_SECONDS = 60 * 60 * 3
 JOBS = {}
 JOBS_LOCK = threading.Lock()
+SAFETY_ERROR_MARKERS = (
+    "rejected by the safety system",
+    "safety system",
+    "safety",
+    "content policy",
+    "policy",
+)
 
 
 def get_client_config(client_slug):
@@ -237,6 +244,11 @@ def openai_model():
 
 def openai_image_model():
     return os.environ.get("OPENAI_IMAGE_MODEL", "gpt-image-1")
+
+
+def is_safety_rejection(error):
+    message = str(error).lower()
+    return any(marker in message for marker in SAFETY_ERROR_MARKERS)
 
 
 def browser_key_setup_allowed():
@@ -370,14 +382,38 @@ def extract_image_bytes(response):
     raise RuntimeError(f"The model did not return generated image data.{detail}")
 
 
-def generate_image_with_images_api(prompt):
+def safety_fallback_image_prompt(title, config):
+    return (
+        f"Create a brand-safe vertical 9:16 cinematic editorial thumbnail background for the title '{title}'. "
+        "Use a symbolic, non-graphic scene instead of literal risky content: a dramatic well-lit central object, "
+        "environment, metaphor, newsroom-style visual, arena, desk, document, vehicle, product, technology object, or abstract action cue. "
+        "Do not depict real people, identifiable public figures, private individuals, minors, weapons, blood, injury, gore, hate symbols, "
+        "explicit content, illegal acts, or distressing scenes. "
+        "No text, no captions, no readable letters, no logos, no watermarks. "
+        f"Make it full-bleed and compatible with the fixed {config['prompt_name']} thumbnail design. "
+        f"{focus_zone_prompt(config)}"
+    )
+
+
+def generate_image_with_images_api(prompt, fallback_prompt=None):
     payload = {
         "model": openai_image_model(),
         "prompt": prompt,
         "size": "1024x1536",
         "n": 1,
     }
-    return extract_image_bytes(openai_images_generate(payload, timeout=180))
+    try:
+        return extract_image_bytes(openai_images_generate(payload, timeout=180))
+    except RuntimeError as error:
+        if not fallback_prompt or not is_safety_rejection(error):
+            raise
+        fallback_payload = {**payload, "prompt": fallback_prompt}
+        try:
+            return extract_image_bytes(openai_images_generate(fallback_payload, timeout=180))
+        except RuntimeError as fallback_error:
+            raise RuntimeError(
+                f"OpenAI rejected the original image prompt, then the safer fallback also failed: {fallback_error}"
+            ) from fallback_error
 
 
 def extract_image_base64(response):
@@ -495,7 +531,7 @@ def create_visual_brief(script_text, title, config, has_person_reference=False, 
         return local_visual_brief(script_text, title, config, source_description, reference_note, variant_note)
 
 
-def generate_subject_image(brief, config, person_reference_path=None):
+def generate_subject_image(brief, config, person_reference_path=None, title=""):
     prompt = (
         f"{brief['visual_prompt']}\n\n"
         "Hard requirements: vertical 9:16, full-bleed image, no text, no readable letters, no logos, no watermarks. "
@@ -509,7 +545,10 @@ def generate_subject_image(brief, config, person_reference_path=None):
         "Keep the area behind the title bars lower contrast but still visually present."
     )
     if not person_reference_path:
-        image_bytes = generate_image_with_images_api(prompt)
+        image_bytes = generate_image_with_images_api(
+            prompt,
+            fallback_prompt=safety_fallback_image_prompt(title or "thumbnail", config),
+        )
         image_path = WORK_DIR / f"subject-{uuid.uuid4().hex}.png"
         image_path.write_bytes(image_bytes)
         return image_path
@@ -718,7 +757,12 @@ def handle_create(script_text, title, subject_path=None, person_reference_path=N
                 current_subject_path = person_reference_path
             else:
                 try:
-                    current_subject_path = generate_subject_image(brief, config, person_reference_path=person_reference_path)
+                    current_subject_path = generate_subject_image(
+                        brief,
+                        config,
+                        person_reference_path=person_reference_path,
+                        title=title,
+                    )
                 except Exception as error:
                     if not person_reference_path:
                         raise
