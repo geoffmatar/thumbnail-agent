@@ -19,6 +19,10 @@ const progressLabel = document.querySelector("#progressLabel");
 const progressPercent = document.querySelector("#progressPercent");
 const progressFill = document.querySelector("#progressFill");
 const progressMeta = document.querySelector("#progressMeta");
+const previewModal = document.querySelector("#previewModal");
+const previewModalImage = document.querySelector("#previewModalImage");
+const previewBackdrop = document.querySelector("#previewBackdrop");
+const closePreview = document.querySelector("#closePreview");
 
 let progressTimer = null;
 let currentClient = "zoomex";
@@ -185,8 +189,18 @@ function createResultCard(item, index, state, client) {
   if (item?.thumbnail_url) {
     image.src = `${item.thumbnail_url}?v=${state.resultVersion}`;
     image.style.display = "block";
+    wrap.classList.add("has-preview");
+    wrap.tabIndex = 0;
+    wrap.setAttribute("role", "button");
+    wrap.setAttribute("aria-label", `Preview ${image.alt}`);
+    wrap.dataset.previewSrc = image.src;
+    wrap.dataset.previewAlt = image.alt;
+    wrap.title = "Click to preview";
   } else {
     image.style.display = "none";
+    wrap.removeAttribute("tabindex");
+    wrap.removeAttribute("role");
+    wrap.removeAttribute("aria-label");
   }
 
   wrap.appendChild(image);
@@ -352,6 +366,42 @@ async function downloadThumbnail(event) {
   }
 }
 
+function openImagePreview(previewWrap) {
+  const previewSrc = previewWrap?.dataset.previewSrc;
+  if (!previewSrc) return;
+  previewModalImage.src = previewSrc;
+  previewModalImage.alt = previewWrap.dataset.previewAlt || "Generated thumbnail large preview";
+  previewModal.hidden = false;
+  document.body.classList.add("preview-open");
+  try {
+    closePreview.focus({ preventScroll: true });
+  } catch {
+    closePreview.focus();
+  }
+}
+
+function closeImagePreview() {
+  if (previewModal.hidden) return;
+  previewModal.hidden = true;
+  previewModalImage.removeAttribute("src");
+  document.body.classList.remove("preview-open");
+}
+
+function previewThumbnail(event) {
+  if (event.target.closest(".result-download")) return;
+  const previewWrap = event.target.closest(".preview-wrap.has-preview");
+  if (!previewWrap) return;
+  openImagePreview(previewWrap);
+}
+
+function previewThumbnailWithKeyboard(event) {
+  if (event.key !== "Enter" && event.key !== " ") return;
+  const previewWrap = event.target.closest(".preview-wrap.has-preview");
+  if (!previewWrap) return;
+  event.preventDefault();
+  openImagePreview(previewWrap);
+}
+
 function updateReferenceFileName() {
   const file = personReference.files && personReference.files[0];
   const state = getClientState();
@@ -464,6 +514,13 @@ scriptText.addEventListener("input", () => {
 });
 personReference.addEventListener("change", updateReferenceFileName);
 resultsList.addEventListener("click", downloadThumbnail);
+resultsList.addEventListener("click", previewThumbnail);
+resultsList.addEventListener("keydown", previewThumbnailWithKeyboard);
+previewBackdrop.addEventListener("click", closeImagePreview);
+closePreview.addEventListener("click", closeImagePreview);
+window.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") closeImagePreview();
+});
 
 syncViewFromUrl();
 createBtn.addEventListener("click", createThumbnail);
