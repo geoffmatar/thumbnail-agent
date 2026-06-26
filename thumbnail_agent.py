@@ -170,18 +170,35 @@ def focus_zone_prompt(config=None):
     x2 = FOCUS_ZONE["x"] + FOCUS_ZONE["w"]
     y2 = FOCUS_ZONE["y"] + FOCUS_ZONE["h"]
     return (
-        f"Composition: place the important subject details inside the central focus square "
+        f"SAFE ZONE RULE, NON-NEGOTIABLE: the hero of the script must live inside the central safe square "
         f"from x={x1} to {x2}, y={y1} to {y2} on a 1080x1920 canvas. "
-        f"This square is between the {config['prompt_name']} logo area and the title bars. "
-        "Faces, eyes, heads, products, vehicles, or the most important action must be centered in that square. "
+        f"This safe square is below the {config['prompt_name']} logo area and above the title bars. "
+        "Treat the top area above this square as background/logo space only, never hero-subject space. "
+        "The hero can be a person, face, athlete, vehicle, robot, product, object, or key action. "
+        "The hero's important details, visual center, and main readable features must be centered inside this safe square. "
+        f"Nothing important may sit above y={y1}. "
         "MANDATORY LIGHTING RULE: any main subject in this central square, including vehicles, robots, products, tools, or other key objects, "
         "must be well-lit, cinematic, sharp, and clearly readable with visible surface detail, strong key light, and subtle rim or edge light. "
         "Do not make the central subject dark, muddy, silhouetted, or low-contrast. "
-        "MANDATORY HUMAN RULE: if any human appears, the face, eyes, head, shoulders, and upper half-body must be centered "
-        f"inside this focus square, below the {config['prompt_name']} logo area. Faces must never sit above the logo height, near the top edge, "
-        "or behind the logo. Use a centered half-body portrait composition for people whenever possible. "
-        f"The subject may extend beyond the square, but no important face or key object should be hidden by the {config['logo_area']} "
-        "or by the title bars at the bottom."
+        "MANDATORY HUMAN RULE: if any human appears, the face, eyes, full head, shoulders, and upper half-body must be centered "
+        f"inside this safe square, below the {config['prompt_name']} logo area. The top of the head, hair, eyes, and face must never appear above "
+        f"y={y1}, behind the logo, overlapping the logo, near the top edge, or higher than the logo. "
+        f"Place the face center around x=540 and between y={y1 + 90} and y={y1 + 260}. "
+        "The face should appear lower than the logo, with clear breathing room between the logo and the head. "
+        "Do not use tight close-up portraits or headshots that push the face into the top half of the image; zoom out and lower the subject "
+        "so the person reads as a centered half-body or full-body hero inside the safe square. "
+        f"The subject may extend beyond the square, but no important face, eyes, head, hero object, vehicle, robot, product, or key action should be hidden by the {config['logo_area']} "
+        "or by the title bars at the bottom. If there is any conflict, prioritize safe-zone placement over dramatic cropping."
+    )
+
+
+def safe_zone_negative_prompt(config=None):
+    config = config or get_client_config(DEFAULT_CLIENT)
+    return (
+        f"face above {config['prompt_name']} logo, head above logo, eyes above logo, face above y={FOCUS_ZONE['y']}, "
+        f"head above y={FOCUS_ZONE['y']}, hero above y={FOCUS_ZONE['y']}, important subject above logo, "
+        "tight close-up headshot, cropped forehead near top edge, hero outside safe zone, hero hidden behind logo, "
+        "important object behind logo, dark central subject, underlit main object"
     )
 
 
@@ -341,7 +358,10 @@ def create_visual_brief(script_text, title, config, has_person_reference=False, 
                 f"{variant_note}"
                 f"No text, no captions, no logos, no black empty poster space. {focus_zone_prompt(config)}"
             ),
-            "negative_prompt": "text, captions, watermarks, logos, blank black background, empty poster space, dark central subject, underlit main object",
+            "negative_prompt": (
+                "text, captions, watermarks, logos, blank black background, empty poster space, "
+                f"{safe_zone_negative_prompt(config)}"
+            ),
             "rationale": "Local fallback brief because OPENAI_API_KEY is not set.",
         }
 
@@ -354,8 +374,13 @@ def create_visual_brief(script_text, title, config, has_person_reference=False, 
                 "content": (
                     "You create visual concepts for vertical social thumbnails. "
                     f"The title is supplied by the user and will be rendered later in fixed {config['prompt_name']} title bars. "
-                    f"Human composition is strict: faces and upper half-bodies must be centered below the {config['prompt_name']} logo area, never above it. "
+                    f"Safe-zone composition is mandatory: the hero subject must be centered in x={FOCUS_ZONE['x']}..{FOCUS_ZONE['x'] + FOCUS_ZONE['w']} "
+                    f"and y={FOCUS_ZONE['y']}..{FOCUS_ZONE['y'] + FOCUS_ZONE['h']}. "
+                    f"Human composition is strict: faces, eyes, full heads, shoulders, and upper half-bodies must be centered below the {config['prompt_name']} logo area, never above it. "
+                    f"For any human, the entire face/head/eyes must stay below y={FOCUS_ZONE['y']}; never above or overlapping the logo. "
+                    "Avoid tight closeups; zoom out and lower the hero subject when needed. "
                     "Central-subject lighting is strict: any main person, vehicle, robot, product, or key object must be well-lit, cinematic, and clearly readable. "
+                    f"Add safe-zone failures to the negative prompt, including: {safe_zone_negative_prompt(config)}. "
                     "Return only JSON matching the schema. Never include text, captions, or logos in the image prompt."
                 ),
             },
@@ -372,6 +397,7 @@ def create_visual_brief(script_text, title, config, has_person_reference=False, 
                             f"{reference_note}"
                             f"{variant_note}"
                             f"{focus_zone_prompt(config)} "
+                            "Do not propose a close-up face crop above the logo; the hero face, object, vehicle, robot, product, or key action must be inside the safe square. "
                             "Keep the lower title area visually calmer but still image-filled.\n\n"
                             f"SCRIPT:\n{script_text[:14000]}"
                         ),
@@ -392,6 +418,11 @@ def create_visual_brief(script_text, title, config, has_person_reference=False, 
 
 
 def generate_subject_image(brief, config, person_reference_path=None):
+    negative_prompt = " ".join(
+        part.strip()
+        for part in [brief.get("negative_prompt", ""), safe_zone_negative_prompt(config)]
+        if part and part.strip()
+    )
     prompt = (
         f"{brief['visual_prompt']}\n\n"
         "Hard requirements: vertical 9:16, full-bleed image, no text, no readable letters, no logos, no watermarks. "
@@ -399,10 +430,14 @@ def generate_subject_image(brief, config, person_reference_path=None):
         "Do not leave giant blank areas for text. Use real environment, texture, action, and depth behind the whole frame. "
         "Any main central subject, including vehicles, robots, products, tools, or other key objects, must be well-lit, cinematic, sharp, and clearly readable; "
         "avoid dark, muddy, silhouetted, or low-contrast central subjects. "
+        f"SAFE-ZONE COMPOSITION IS MORE IMPORTANT THAN DRAMA: the hero subject's face, object, vehicle, robot, product, or key action must be centered in "
+        f"x={FOCUS_ZONE['x']}..{FOCUS_ZONE['x'] + FOCUS_ZONE['w']}, y={FOCUS_ZONE['y']}..{FOCUS_ZONE['y'] + FOCUS_ZONE['h']}. "
         f"If humans are present, the main face and upper half-body must be centered below the {config['prompt_name']} logo area; "
-        "do not place any face above the logo height or near the top of the frame. "
+        f"the full face, head, and eyes must stay below y={FOCUS_ZONE['y']}; do not place any face above the logo height or near the top of the frame. "
+        "Avoid close-up headshots; zoom out and lower the person so the face and half-body sit inside the central safe square. "
         f"{focus_zone_prompt(config)} "
-        "Keep the area behind the title bars lower contrast but still visually present."
+        "Keep the area behind the title bars lower contrast but still visually present. "
+        f"Avoid: {negative_prompt}."
     )
     content = [{"type": "input_text", "text": prompt}]
     if person_reference_path:
