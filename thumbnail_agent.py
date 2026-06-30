@@ -150,7 +150,23 @@ CLIENTS = {
         "logo_area": "upper Siyata design area",
         "template_context": "fixed Siyata design layer with a black lower field and blue title box",
         "title_bands": [
-            {"x": 96, "y": 1215, "w": 888, "h": 142, "radius": 0, "fill": (0, 0, 0, 255), "text_fill": "#ffffff", "font_max": 78, "font_min": 32, "text_center_x": 540, "text_center_y": 1290},
+            {
+                "x": 96,
+                "y": 1215,
+                "w": 888,
+                "h": 142,
+                "radius": 0,
+                "fill": None,
+                "text_fill": "#ffffff",
+                "font_max": 78,
+                "font_min": 32,
+                "text_center_x": 540,
+                "text_center_y": 1290,
+                "stroke_width": 1,
+                "stroke_fill": (0, 0, 0, 210),
+                "shadow_offsets": [(3, 5)],
+                "shadow_fill": (0, 0, 0, 185),
+            },
             {"x": 106, "y": 1374, "w": 868, "h": 152, "radius": 0, "fill": (25, 111, 137, 255), "text_fill": "#ffffff", "font_max": 92, "font_min": 36, "text_center_x": 540, "text_center_y": 1455},
         ],
     },
@@ -528,7 +544,17 @@ def draw_centered_text(draw, box, text, font, fill):
     center_y = box.get("text_center_y", y + h / 2)
     tx = center_x - (right + left) / 2
     ty = center_y - (bottom + top) / 2
-    draw.text((tx, ty), text, font=font, fill=fill)
+    shadow_fill = box.get("shadow_fill", (0, 0, 0, 160))
+    for dx, dy in box.get("shadow_offsets", []):
+        draw.text((tx + dx, ty + dy), text, font=font, fill=shadow_fill)
+    draw.text(
+        (tx, ty),
+        text,
+        font=font,
+        fill=fill,
+        stroke_width=box.get("stroke_width", 0),
+        stroke_fill=box.get("stroke_fill", shadow_fill),
+    )
 
 
 def fit_cover(image, size):
@@ -550,11 +576,12 @@ def draw_title(canvas, title, config):
     draw = ImageDraw.Draw(canvas)
 
     for index, band in enumerate(config["title_bands"]):
-        draw.rounded_rectangle(
-            (band["x"], band["y"], band["x"] + band["w"], band["y"] + band["h"]),
-            radius=band["radius"],
-            fill=band["fill"],
-        )
+        if band.get("fill") is not None:
+            draw.rounded_rectangle(
+                (band["x"], band["y"], band["x"] + band["w"], band["y"] + band["h"]),
+                radius=band["radius"],
+                fill=band["fill"],
+            )
         text = title_lines[index] if index < len(title_lines) else ""
         if text:
             font = fit_font(
