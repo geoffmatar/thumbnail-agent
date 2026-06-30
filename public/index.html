@@ -88,7 +88,7 @@
             </span>
           </button>
 
-          <button class="project-tile project-tile-pending" type="button" disabled>
+          <button id="openSiyata" class="project-tile" type="button" aria-label="Open Siyata">
             <span class="project-logo-wrap client-logo-wrap">
               <img class="project-logo client-logo" src="/siyata-card-logo.png" alt="Siyata">
             </span>
@@ -96,7 +96,12 @@
               <span class="project-name">Siyata</span>
               <span class="project-role">Agent</span>
             </span>
-            <span class="project-status">Coming soon</span>
+            <span class="project-action" aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <path d="M5 12h14"></path>
+                <path d="m13 6 6 6-6 6"></path>
+              </svg>
+            </span>
           </button>
 
           <button class="project-tile project-tile-pending" type="button" disabled>

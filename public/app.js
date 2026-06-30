@@ -4,6 +4,7 @@ const openZoomex = document.querySelector("#openZoomex");
 const openAlliance = document.querySelector("#openAlliance");
 const openAllianceBlack = document.querySelector("#openAllianceBlack");
 const openAllianceLgbtq = document.querySelector("#openAllianceLgbtq");
+const openSiyata = document.querySelector("#openSiyata");
 const backHome = document.querySelector("#backHome");
 const createBtn = document.querySelector("#createBtn");
 const statusLine = document.querySelector("#statusLine");
@@ -59,6 +60,14 @@ const clients = {
     alt: "Alliance LGBTQ+",
     title: "Thumbnail agent",
     placeholder: "ALLIANCE",
+  },
+  siyata: {
+    slug: "siyata",
+    bodyClass: "siyata-mode",
+    logo: "/siyata-card-logo.png",
+    alt: "Siyata",
+    title: "Thumbnail agent",
+    placeholder: "SIYATA",
   },
 };
 
@@ -504,6 +513,7 @@ openZoomex.addEventListener("click", () => showView("zoomex", true));
 openAlliance.addEventListener("click", () => showView("alliance-latin", true));
 openAllianceBlack.addEventListener("click", () => showView("alliance-black", true));
 openAllianceLgbtq.addEventListener("click", () => showView("alliance-lgbtq", true));
+openSiyata.addEventListener("click", () => showView("siyata", true));
 backHome.addEventListener("click", () => showView("home", true));
 window.addEventListener("hashchange", syncViewFromUrl);
 titleInput.addEventListener("input", () => {

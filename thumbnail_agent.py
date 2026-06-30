@@ -75,6 +75,8 @@ ALLIANCE_DESIGN_PATH = ASSETS_DIR / "alliance-latin-design.png"
 ALLIANCE_BLACK_DESIGN_PATH = ASSETS_DIR / "alliance-black-design.png"
 ALLIANCE_LGBTQ_DESIGN_PATH = ASSETS_DIR / "alliance-lgbtq-design.png"
 ALLIANCE_FONT_PATH = ASSETS_DIR / "Poppins-Bold.ttf"
+SIYATA_DESIGN_PATH = ASSETS_DIR / "siyata-design.png"
+SIYATA_FONT_PATH = ASSETS_DIR / "HelveticaNeueLTArabic-Bold.ttf"
 FOCUS_ZONE = {"x": 210, "y": 560, "w": 660, "h": 660}
 CLIENTS = {
     "zoomex": {
@@ -137,9 +139,24 @@ CLIENTS = {
             {"x": -10, "y": 1376, "w": 1052, "h": 108, "radius": 58, "fill": (237, 49, 134, 255), "text_fill": "#ffffff", "font_max": 74, "font_min": 34, "text_center_x": 540},
         ],
     },
+    "siyata": {
+        "slug": "siyata",
+        "display_name": "Siyata",
+        "prompt_name": "Siyata",
+        "design_path": SIYATA_DESIGN_PATH,
+        "font_path": SIYATA_FONT_PATH,
+        "font_label": "Helvetica Neue Arabic ready",
+        "design_label": "Siyata design ready",
+        "logo_area": "upper Siyata design area",
+        "template_context": "fixed Siyata design layer with a black lower field and blue title box",
+        "title_bands": [
+            {"x": 96, "y": 1215, "w": 888, "h": 142, "radius": 0, "fill": (0, 0, 0, 255), "text_fill": "#ffffff", "font_max": 78, "font_min": 32, "text_center_x": 540, "text_center_y": 1290},
+            {"x": 106, "y": 1374, "w": 868, "h": 152, "radius": 0, "fill": (25, 111, 137, 255), "text_fill": "#ffffff", "font_max": 92, "font_min": 36, "text_center_x": 540, "text_center_y": 1455},
+        ],
+    },
 }
 DEFAULT_CLIENT = "zoomex"
-TWO_THUMBNAIL_CLIENTS = {"zoomex", "alliance-latin", "alliance-black", "alliance-lgbtq"}
+TWO_THUMBNAIL_CLIENTS = {"zoomex", "alliance-latin", "alliance-black", "alliance-lgbtq", "siyata"}
 JOB_TTL_SECONDS = 60 * 60 * 3
 JOBS = {}
 JOBS_LOCK = threading.Lock()
