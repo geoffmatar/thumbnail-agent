@@ -498,15 +498,20 @@ def person_reference_image_prompt(brief, config, negative_prompt, retry=False):
         if retry
         else ""
     )
-    return (
-        f"{retry_note}Create a vertical 9:16 full-bleed cinematic thumbnail image. "
-        f"Scene idea: {scene_idea} "
-        "Use the person in the attached image as the main subject. You may change the pose, scene, scale, and framing to make the thumbnail work. "
-        f"Only composition rule: keep the person's face, head, upper body, and any important subject or object inside the safe zone x={x1}..{x2}, y={y1}..{y2}, "
-        f"below the {config['prompt_name']} logo area and above the title bars. "
-        "Make the subject well-lit, sharp, cinematic, and clearly readable. Fill the entire frame. No text, readable letters, logos, watermarks, or title bars. "
-        f"Avoid: {negative_prompt}."
+    reference_rule = (
+        "Use the person in the attached image as the main subject. The pose, background, scale, and framing may change to fit the thumbnail. "
+        f"The one mandatory rule is safe-zone placement: keep the person's face, head, upper body, and any important subject or object inside x={x1}..{x2}, y={y1}..{y2}, "
+        f"below the {config['prompt_name']} logo area and above the title bars."
     )
+    if retry:
+        return (
+            f"{retry_note}Create a vertical 9:16 full-bleed cinematic thumbnail image. "
+            f"Scene idea: {scene_idea} "
+            f"{reference_rule} "
+            "Make the subject well-lit, sharp, cinematic, and clearly readable. Fill the entire frame. No text, readable letters, logos, watermarks, or title bars. "
+            f"Avoid: {negative_prompt}."
+        )
+    return f"{standard_subject_image_prompt(brief, config, negative_prompt)}\n\n{reference_rule}"
 
 
 def image_generation_payload(prompt, person_reference_path=None):
@@ -618,6 +623,39 @@ def fit_cover(image, size):
     return ImageOps.fit(image.convert("RGBA"), size, method=Image.Resampling.LANCZOS)
 
 
+def fit_cover_with_anchor(image, size, anchor=(0.5, 0.3), target=(0.5, 0.39)):
+    image = image.convert("RGBA")
+    source_w, source_h = image.size
+    target_w, target_h = size
+    scale = max(target_w / source_w, target_h / source_h)
+    resized_w = max(1, round(source_w * scale))
+    resized_h = max(1, round(source_h * scale))
+    resized = image.resize((resized_w, resized_h), Image.Resampling.LANCZOS)
+
+    crop_left = round(anchor[0] * resized_w - target[0] * target_w)
+    crop_top = round(anchor[1] * resized_h - target[1] * target_h)
+    crop_left = max(0, min(crop_left, resized_w - target_w))
+    crop_top = max(0, min(crop_top, resized_h - target_h))
+    return resized.crop((crop_left, crop_top, crop_left + target_w, crop_top + target_h))
+
+
+def feathered_alpha(size, feather=96):
+    width, height = size
+    mask = Image.new("L", size, 255)
+    pixels = mask.load()
+    for y in range(height):
+        top_alpha = min(255, int(255 * y / feather)) if y < feather else 255
+        bottom_distance = height - 1 - y
+        bottom_alpha = min(255, int(255 * bottom_distance / feather)) if bottom_distance < feather else 255
+        row_alpha = min(top_alpha, bottom_alpha)
+        for x in range(width):
+            left_alpha = min(255, int(255 * x / feather)) if x < feather else 255
+            right_distance = width - 1 - x
+            right_alpha = min(255, int(255 * right_distance / feather)) if right_distance < feather else 255
+            pixels[x, y] = min(row_alpha, left_alpha, right_alpha)
+    return mask.filter(ImageFilter.GaussianBlur(8))
+
+
 def adjust_subject(image):
     image = image.convert("RGB")
     image = ImageOps.autocontrast(image, cutoff=1)
@@ -629,9 +667,15 @@ def adjust_subject(image):
 
 def build_reference_subject_image(reference_path):
     source = Image.open(reference_path).convert("RGBA")
-    background = fit_cover(source, CANVAS_SIZE)
-    background = background.filter(ImageFilter.GaussianBlur(20))
-    background = ImageEnhance.Brightness(background.convert("RGB")).enhance(0.82).convert("RGBA")
+    background = fit_cover_with_anchor(
+        source,
+        CANVAS_SIZE,
+        anchor=(0.5, 0.31),
+        target=(0.5, (FOCUS_ZONE["y"] + 190) / CANVAS_SIZE[1]),
+    )
+    background = background.filter(ImageFilter.GaussianBlur(18))
+    background = ImageEnhance.Brightness(background.convert("RGB")).enhance(0.82)
+    background = ImageEnhance.Contrast(background).enhance(1.02).convert("RGBA")
 
     source_w, source_h = source.size
     is_landscape = source_w >= source_h
@@ -649,8 +693,9 @@ def build_reference_subject_image(reference_path):
     top = max(0, min(top, BOTTOM_BAND["y"] - 80))
     left = round((CANVAS_SIZE[0] - target_width) / 2)
 
-    canvas = Image.new("RGBA", CANVAS_SIZE, (0, 0, 0, 255))
-    canvas.alpha_composite(background)
+    mask = feathered_alpha(foreground.size, feather=120 if is_landscape else 80)
+    foreground.putalpha(mask)
+    canvas = background.copy()
     canvas.alpha_composite(foreground, (left, top))
 
     fallback_path = WORK_DIR / f"reference-subject-{uuid.uuid4().hex}.png"
