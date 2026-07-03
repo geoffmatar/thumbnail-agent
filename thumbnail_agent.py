@@ -231,7 +231,26 @@ def safe_zone_negative_prompt(config=None):
         f"face above {config['prompt_name']} logo, head above logo, eyes above logo, face above y={FOCUS_ZONE['y']}, "
         f"head above y={FOCUS_ZONE['y']}, hero above y={FOCUS_ZONE['y']}, important subject above logo, "
         "tight close-up headshot, cropped forehead near top edge, hero outside safe zone, hero hidden behind logo, "
-        "important object behind logo, dark central subject, underlit main object"
+        "important object behind logo, dark central subject, underlit main object, flat pasted reference photo, "
+        "reused reference-photo crop, landscape photo crop, giant cropped face from uploaded image"
+    )
+
+
+def person_reference_prompt(config=None):
+    config = config or get_client_config(DEFAULT_CLIENT)
+    x1 = FOCUS_ZONE["x"]
+    y1 = FOCUS_ZONE["y"]
+    x2 = FOCUS_ZONE["x"] + FOCUS_ZONE["w"]
+    y2 = FOCUS_ZONE["y"] + FOCUS_ZONE["h"]
+    return (
+        "PERSON REFERENCE RULE, NON-NEGOTIABLE: the uploaded image is an identity reference only, not a layout, crop, or background. "
+        "Create a new cinematic thumbnail scene featuring that same person as the clear hero subject. "
+        f"The person's face, eyes, full head, shoulders, chest, and upper half-body must be centered inside the safe square "
+        f"x={x1}..{x2}, y={y1}..{y2}, below the {config['prompt_name']} logo area and above the title bars. "
+        f"Place the face center near x=540 and y={y1 + 170}; keep the entire head below y={y1} with clear breathing room under the logo. "
+        "Do not copy the uploaded photo's original framing if it is landscape, close-up, off-center, cropped, or too high. "
+        "Zoom out, lower, and recompose the person as a centered half-body or full-body hero. "
+        "Never paste the uploaded photo flat into the thumbnail, never crop into a giant head, and never let the face or head sit above the logo."
     )
 
 
@@ -375,6 +394,7 @@ def create_visual_brief(script_text, title, config, has_person_reference=False, 
             "A person reference photo will be supplied to the image generator. "
             "The generated thumbnail must feature that exact person as the main human subject, preserving their recognizable face, "
             "hair, age, gender presentation, and overall appearance while placing them into the scene required by the script. "
+            f"{person_reference_prompt(config)} "
         )
     variant_note = ""
     if variant_count > 1:
@@ -413,6 +433,7 @@ def create_visual_brief(script_text, title, config, has_person_reference=False, 
                     f"For any human, the entire face/head/eyes must stay below y={FOCUS_ZONE['y']}; never above or overlapping the logo. "
                     "Avoid tight closeups; zoom out and lower the hero subject when needed. "
                     "Central-subject lighting is strict: any main person, vehicle, robot, product, or key object must be well-lit, cinematic, and clearly readable. "
+                    f"When a person reference is supplied, it is identity-only and must follow this rule exactly: {person_reference_prompt(config)} "
                     f"Add safe-zone failures to the negative prompt, including: {safe_zone_negative_prompt(config)}. "
                     "Return only JSON matching the schema. Never include text, captions, or logos in the image prompt."
                 ),
@@ -478,7 +499,8 @@ def generate_subject_image(brief, config, person_reference_path=None):
         content[0]["text"] += (
             "\n\nUse the attached person reference photo as the identity reference for the main human subject. "
             "Preserve the person's recognizable facial identity and upper-body appearance, but place them naturally into the generated scene. "
-            "The uploaded photo is a reference only; do not recreate it as a flat pasted photo."
+            f"{person_reference_prompt(config)} "
+            "The uploaded photo is a reference only; do not recreate it as a flat pasted photo or reuse its original crop."
         )
     payload = {
         "model": openai_model(),
@@ -683,18 +705,16 @@ def handle_create(script_text, title, subject_path=None, person_reference_path=N
         current_subject_path = subject_path
         if not current_subject_path:
             if not used_ai and person_reference_path:
-                current_subject_path = person_reference_path
+                raise RuntimeError("OpenAI image generation is required when using a person reference image.")
             else:
                 try:
                     current_subject_path = generate_subject_image(brief, config, person_reference_path=person_reference_path)
                 except Exception as error:
                     if not person_reference_path:
                         raise
-                    current_subject_path = person_reference_path
-                    used_ai = False
-                    brief["rationale"] = (
-                        f"{brief.get('rationale', '')} Used the person reference photo directly because AI image generation failed: {error}"
-                    ).strip()
+                    raise RuntimeError(
+                        f"Could not generate a new thumbnail scene from the person reference. Try again with a clearer reference image. Details: {error}"
+                    ) from error
 
         if progress_callback and show_detailed_progress:
             label = f" {variant_index}/{thumbnail_count}" if thumbnail_count > 1 else ""
