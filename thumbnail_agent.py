@@ -440,6 +440,23 @@ def extract_image_base64(response):
     raise RuntimeError("The model did not return generated image data.")
 
 
+def user_friendly_error(error):
+    message = str(error)
+    lowered = message.lower()
+    public_figure_markers = [
+        "public figure",
+        "recognizable identity",
+        "reference photo",
+    ]
+    if all(marker in lowered for marker in public_figure_markers):
+        return (
+            "This reference image appears to be a public figure. "
+            "OpenAI will not recreate a recognizable public figure from an uploaded photo. "
+            "Remove the reference image, or upload a non-public person the team has permission to use."
+        )
+    return message
+
+
 def visual_brief_schema():
     return {
         "type": "object",
@@ -1051,12 +1068,13 @@ def run_create_job(job_id, script_text, title, person_reference_path=None, clien
             finished_at=time.time(),
         )
     except Exception as error:
+        friendly_error = user_friendly_error(error)
         update_job(
             job_id,
             status="error",
             progress=100,
             message="Thumbnail creation failed.",
-            error=str(error),
+            error=friendly_error,
             finished_at=time.time(),
         )
 
