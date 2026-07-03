@@ -33,6 +33,7 @@ GENERATED_DIR = APP_DIR / "generated"
 WORK_DIR = APP_DIR / "work"
 
 OPENAI_ENDPOINT = "https://api.openai.com/v1/responses"
+OPENAI_IMAGES_EDIT_ENDPOINT = "https://api.openai.com/v1/images/edits"
 PUBLIC_ASSET_PATHS = {
     "/styles.css",
     "/app.js",
@@ -295,6 +296,10 @@ def openai_model():
     return os.environ.get("OPENAI_MODEL", "gpt-5.5")
 
 
+def openai_image_model():
+    return os.environ.get("OPENAI_IMAGE_MODEL", "gpt-image-1")
+
+
 def browser_key_setup_allowed():
     return False
 
@@ -339,6 +344,80 @@ def openai_responses_create(payload, timeout=240):
         raise RuntimeError(f"OpenAI request failed: {message}") from error
 
 
+def encode_multipart(fields, files):
+    boundary = f"----thumbnail-agent-{uuid.uuid4().hex}"
+    body = bytearray()
+    for name, value in fields.items():
+        body.extend(f"--{boundary}\r\n".encode("utf-8"))
+        body.extend(f'Content-Disposition: form-data; name="{name}"\r\n\r\n'.encode("utf-8"))
+        body.extend(str(value).encode("utf-8"))
+        body.extend(b"\r\n")
+    for name, filename, content_type, data in files:
+        body.extend(f"--{boundary}\r\n".encode("utf-8"))
+        body.extend(
+            (
+                f'Content-Disposition: form-data; name="{name}"; filename="{filename}"\r\n'
+                f"Content-Type: {content_type}\r\n\r\n"
+            ).encode("utf-8")
+        )
+        body.extend(data)
+        body.extend(b"\r\n")
+    body.extend(f"--{boundary}--\r\n".encode("utf-8"))
+    return f"multipart/form-data; boundary={boundary}", bytes(body)
+
+
+def openai_images_edit(prompt, reference_path, timeout=240):
+    api_key = openai_key()
+    if not api_key:
+        raise RuntimeError("Add your OpenAI API key before generating thumbnails.")
+
+    normalized_path = normalize_reference_image(reference_path)
+    content_type = mimetypes.guess_type(str(normalized_path))[0] or "image/png"
+    multipart_type, body = encode_multipart(
+        {
+            "model": openai_image_model(),
+            "prompt": prompt,
+            "size": "1024x1536",
+        },
+        [
+            (
+                "image",
+                normalized_path.name,
+                content_type,
+                normalized_path.read_bytes(),
+            )
+        ],
+    )
+    request = urllib.request.Request(
+        OPENAI_IMAGES_EDIT_ENDPOINT,
+        data=body,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": multipart_type,
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            result = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as error:
+        body_text = error.read().decode("utf-8", errors="replace")
+        try:
+            message = json.loads(body_text).get("error", {}).get("message") or body_text
+        except json.JSONDecodeError:
+            message = body_text
+        raise RuntimeError(f"OpenAI image edit failed: {message}") from error
+
+    if result.get("data"):
+        first_image = result["data"][0]
+        if first_image.get("b64_json"):
+            return base64.b64decode(first_image["b64_json"])
+        if first_image.get("url"):
+            with urllib.request.urlopen(first_image["url"], timeout=timeout) as image_response:
+                return image_response.read()
+    raise RuntimeError("OpenAI image edit did not return generated image data.")
+
+
 def extract_response_text(response):
     if isinstance(response.get("output_text"), str):
         return response["output_text"]
@@ -355,6 +434,9 @@ def extract_image_base64(response):
     for item in response.get("output", []):
         if item.get("type") == "image_generation_call" and item.get("result"):
             return item["result"]
+    response_text = extract_response_text(response)
+    if response_text:
+        raise RuntimeError(f"The model did not return generated image data: {response_text[:500]}")
     raise RuntimeError("The model did not return generated image data.")
 
 
@@ -510,6 +592,33 @@ def person_reference_image_prompt(brief, config, negative_prompt, retry=False):
     return f"{standard_subject_image_prompt(brief, config, negative_prompt)}\n\n{reference_rule}"
 
 
+def person_reference_edit_prompt(brief, config, negative_prompt, retry=False):
+    x1 = FOCUS_ZONE["x"]
+    y1 = FOCUS_ZONE["y"]
+    x2 = FOCUS_ZONE["x"] + FOCUS_ZONE["w"]
+    y2 = FOCUS_ZONE["y"] + FOCUS_ZONE["h"]
+    retry_line = (
+        "This is a retry: make the composition simpler, use a clean centered half-body or full-body hero, and avoid complex cropping. "
+        if retry
+        else ""
+    )
+    return (
+        f"{brief['visual_prompt']}\n\n"
+        f"{retry_line}"
+        "Create a brand-new full-frame vertical 9:16 cinematic thumbnail subject image from the script. "
+        "Use the uploaded image only as the identity reference for the main person. "
+        "The main person must be the same recognizable person from the uploaded image, but the pose, clothing, expression, lighting, camera angle, and background may change to fit the script. "
+        "Do not paste the uploaded photo into the canvas. Do not preserve the uploaded photo background. Do not create a collage, photo strip, duplicated blurred background, or visible image seam. "
+        "Fill the entire canvas with one natural, coherent scene from top to bottom. "
+        "No text, no readable letters, no logos, no watermarks. "
+        f"SAFE ZONE RULE: place the person's face, head, eyes, upper body, and any important hero object inside x={x1}..{x2}, y={y1}..{y2}. "
+        f"The face and important subject must be below the {config['prompt_name']} logo area and above the title bars. "
+        "If the reference person is an athlete, presenter, politician, creator, or worker, create a cinematic new scene where that person is the centered hero in the safe zone. "
+        "The hero subject must be well-lit, sharp, cinematic, and clearly readable. "
+        f"Avoid: {negative_prompt}."
+    )
+
+
 def image_generation_payload(prompt, person_reference_path=None):
     content = [{"type": "input_text", "text": prompt}]
     if person_reference_path:
@@ -519,6 +628,15 @@ def image_generation_payload(prompt, person_reference_path=None):
         "input": [{"role": "user", "content": content}],
         "tools": [{"type": "image_generation", "action": "generate"}],
     }
+
+
+def normalize_reference_image(path):
+    image = ImageOps.exif_transpose(Image.open(path)).convert("RGB")
+    image.thumbnail((1536, 1536), Image.Resampling.LANCZOS)
+    normalized_path = WORK_DIR / f"reference-{uuid.uuid4().hex}.png"
+    normalized_path.parent.mkdir(parents=True, exist_ok=True)
+    image.save(normalized_path, "PNG", optimize=True)
+    return normalized_path
 
 
 def generate_subject_image(brief, config, person_reference_path=None):
@@ -534,6 +652,23 @@ def generate_subject_image(brief, config, person_reference_path=None):
         prompts.append(person_reference_image_prompt(brief, config, negative_prompt, retry=True))
 
     last_error = None
+    if person_reference_path:
+        for retry in (False, True):
+            try:
+                image_bytes = openai_images_edit(
+                    person_reference_edit_prompt(brief, config, negative_prompt, retry=retry),
+                    person_reference_path,
+                )
+                break
+            except Exception as error:
+                last_error = error
+        else:
+            image_bytes = None
+        if image_bytes:
+            image_path = WORK_DIR / f"subject-{uuid.uuid4().hex}.png"
+            image_path.write_bytes(image_bytes)
+            return image_path
+
     for image_prompt in prompts:
         try:
             payload = image_generation_payload(image_prompt, person_reference_path=person_reference_path)
