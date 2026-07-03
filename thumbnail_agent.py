@@ -22,7 +22,7 @@ from pathlib import Path
 warnings.filterwarnings("ignore", "'cgi' is deprecated", DeprecationWarning)
 import cgi
 
-from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont, ImageOps
+from PIL import Image, ImageDraw, ImageEnhance, ImageFont, ImageOps
 
 
 APP_DIR = Path(__file__).resolve().parent
@@ -486,50 +486,34 @@ def standard_subject_image_prompt(brief, config, negative_prompt):
     )
 
 
-def person_reference_image_prompt(brief, config, negative_prompt, retry=False, outpaint=False):
+def person_reference_image_prompt(brief, config, negative_prompt, retry=False):
     x1 = FOCUS_ZONE["x"]
     y1 = FOCUS_ZONE["y"]
     x2 = FOCUS_ZONE["x"] + FOCUS_ZONE["w"]
     y2 = FOCUS_ZONE["y"] + FOCUS_ZONE["h"]
-    scene_idea = " ".join((brief.get("visual_prompt") or "").split())
-    scene_idea = scene_idea[:500 if retry else 900]
-    retry_note = "Retry with a very simple composition. " if retry else ""
     reference_rule = (
-        "Use the person in the attached image as the main subject. The pose, background, scale, and framing may change to fit the thumbnail. "
-        f"The one mandatory rule is safe-zone placement: keep the person's face, head, upper body, and any important subject or object inside x={x1}..{x2}, y={y1}..{y2}, "
+        "PERSON REFERENCE RULE: Generate the same type of full-frame cinematic script-based image you would create with no reference image. "
+        "The only difference is that the main person/hero must be the same person from the attached reference image. "
+        "Use the attached image as identity reference only: preserve the person's recognizable face, hair, body type, and overall look. "
+        "Do not copy/paste the uploaded photo, do not keep the uploaded photo background, do not make a collage, and do not create a rectangular photo strip. "
+        "The pose, scale, clothing, lighting, camera angle, and background may change naturally to fit the script and thumbnail. "
+        "Do not replace the person with a random similar-looking person. "
+        f"Safe-zone placement is mandatory: keep the person's face, head, upper body, and any important subject or object inside x={x1}..{x2}, y={y1}..{y2}, "
         f"below the {config['prompt_name']} logo area and above the title bars."
     )
-    if outpaint:
-        return (
-            "Create a seamless content-aware 9:16 thumbnail scene from the uploaded reference. "
-            "The first attached image is the identity reference. The second attached image is only a rough safe-zone placement guide; do not copy its artifacts, seams, or rough edge extension. "
-            "Use the person from the reference as the hero, but do not paste the photo as a rectangle and do not use a blurred duplicate as the background. "
-            "Outpaint and rebuild the missing top, bottom, and side areas as one continuous cinematic environment that matches the script and reference image. "
-            "The final frame must look like a single original photograph, with no seams, no soft duplicate, no collage edges, and no empty areas. "
-            f"Scene idea: {scene_idea} "
-            f"{reference_rule} "
-            "The person can be naturally reposed, resized, relit, or placed into a new matching scene as long as identity and safe-zone placement are preserved. "
-            "Keep the hero well-lit, sharp, cinematic, and readable. No text, readable letters, logos, watermarks, title bars, or template graphics. "
-            f"Avoid: {negative_prompt}."
-        )
     if retry:
         return (
-            f"{retry_note}Create a vertical 9:16 full-bleed cinematic thumbnail image. "
-            f"Scene idea: {scene_idea} "
-            f"{reference_rule} "
-            "Make the subject well-lit, sharp, cinematic, and clearly readable. Fill the entire frame. No text, readable letters, logos, watermarks, or title bars. "
-            f"Avoid: {negative_prompt}."
+            f"{standard_subject_image_prompt(brief, config, negative_prompt)}\n\n"
+            "Retry with a simpler composition and a cleaner full-body or half-body framing. "
+            f"{reference_rule}"
         )
     return f"{standard_subject_image_prompt(brief, config, negative_prompt)}\n\n{reference_rule}"
 
 
-def image_generation_payload(prompt, person_reference_path=None, image_paths=None):
+def image_generation_payload(prompt, person_reference_path=None):
     content = [{"type": "input_text", "text": prompt}]
-    attached_paths = list(image_paths or [])
-    if person_reference_path and not attached_paths:
-        attached_paths.append(person_reference_path)
-    for path in attached_paths:
-        content.append({"type": "input_image", "image_url": image_data_url(path)})
+    if person_reference_path:
+        content.append({"type": "input_image", "image_url": image_data_url(person_reference_path)})
     return {
         "model": openai_model(),
         "input": [{"role": "user", "content": content}],
@@ -545,22 +529,14 @@ def generate_subject_image(brief, config, person_reference_path=None):
         else standard_subject_image_prompt(brief, config, negative_prompt)
     )
 
-    prompts = [(prompt, [person_reference_path] if person_reference_path else [])]
+    prompts = [prompt]
     if person_reference_path:
-        layout_path = build_reference_subject_image(person_reference_path)
-        prompts.insert(
-            0,
-            (
-                person_reference_image_prompt(brief, config, negative_prompt, outpaint=True),
-                [person_reference_path, layout_path],
-            ),
-        )
-        prompts.append((person_reference_image_prompt(brief, config, negative_prompt, retry=True), [person_reference_path]))
+        prompts.append(person_reference_image_prompt(brief, config, negative_prompt, retry=True))
 
     last_error = None
-    for image_prompt, prompt_image_paths in prompts:
+    for image_prompt in prompts:
         try:
-            payload = image_generation_payload(image_prompt, image_paths=prompt_image_paths)
+            payload = image_generation_payload(image_prompt, person_reference_path=person_reference_path)
             image_bytes = base64.b64decode(extract_image_base64(openai_responses_create(payload)))
             break
         except Exception as error:
@@ -643,39 +619,6 @@ def fit_cover(image, size):
     return ImageOps.fit(image.convert("RGBA"), size, method=Image.Resampling.LANCZOS)
 
 
-def fit_cover_with_anchor(image, size, anchor=(0.5, 0.3), target=(0.5, 0.39)):
-    image = image.convert("RGBA")
-    source_w, source_h = image.size
-    target_w, target_h = size
-    scale = max(target_w / source_w, target_h / source_h)
-    resized_w = max(1, round(source_w * scale))
-    resized_h = max(1, round(source_h * scale))
-    resized = image.resize((resized_w, resized_h), Image.Resampling.LANCZOS)
-
-    crop_left = round(anchor[0] * resized_w - target[0] * target_w)
-    crop_top = round(anchor[1] * resized_h - target[1] * target_h)
-    crop_left = max(0, min(crop_left, resized_w - target_w))
-    crop_top = max(0, min(crop_top, resized_h - target_h))
-    return resized.crop((crop_left, crop_top, crop_left + target_w, crop_top + target_h))
-
-
-def feathered_alpha(size, feather=96):
-    width, height = size
-    mask = Image.new("L", size, 255)
-    pixels = mask.load()
-    for y in range(height):
-        top_alpha = min(255, int(255 * y / feather)) if y < feather else 255
-        bottom_distance = height - 1 - y
-        bottom_alpha = min(255, int(255 * bottom_distance / feather)) if bottom_distance < feather else 255
-        row_alpha = min(top_alpha, bottom_alpha)
-        for x in range(width):
-            left_alpha = min(255, int(255 * x / feather)) if x < feather else 255
-            right_distance = width - 1 - x
-            right_alpha = min(255, int(255 * right_distance / feather)) if right_distance < feather else 255
-            pixels[x, y] = min(row_alpha, left_alpha, right_alpha)
-    return mask.filter(ImageFilter.GaussianBlur(8))
-
-
 def adjust_subject(image):
     image = image.convert("RGB")
     image = ImageOps.autocontrast(image, cutoff=1)
@@ -683,68 +626,6 @@ def adjust_subject(image):
     image = ImageEnhance.Contrast(image).enhance(1.04)
     image = ImageEnhance.Color(image).enhance(1.02)
     return image.convert("RGBA")
-
-
-def paste_resized_region(canvas, source, box):
-    left, top, right, bottom = box
-    width = max(1, right - left)
-    height = max(1, bottom - top)
-    canvas.alpha_composite(source.resize((width, height), Image.Resampling.BICUBIC), (left, top))
-
-
-def build_reference_subject_image(reference_path):
-    source = ImageOps.exif_transpose(Image.open(reference_path)).convert("RGBA")
-    source_w, source_h = source.size
-    is_landscape = source_w >= source_h
-
-    target_width = CANVAS_SIZE[0] if is_landscape else min(CANVAS_SIZE[0], 880)
-    target_height = max(1, round(source_h * target_width / source_w))
-    max_height = BOTTOM_BAND["y"] - 80
-    if target_height > max_height:
-        target_height = max_height
-        target_width = max(1, round(source_w * target_height / source_h))
-    if target_height < FOCUS_ZONE["h"] and target_width < CANVAS_SIZE[0]:
-        scale_up = min(CANVAS_SIZE[0] / target_width, FOCUS_ZONE["h"] / target_height)
-        target_width = max(1, round(target_width * scale_up))
-        target_height = max(1, round(target_height * scale_up))
-
-    placed = source.resize((target_width, target_height), Image.Resampling.LANCZOS)
-    target_face_y = FOCUS_ZONE["y"] + 210
-    estimated_face_ratio = 0.31 if is_landscape else 0.23
-    top = round(target_face_y - target_height * estimated_face_ratio)
-    top = max(0, min(top, BOTTOM_BAND["y"] - target_height - 12))
-    left = round((CANVAS_SIZE[0] - target_width) / 2)
-    right = left + target_width
-    bottom = top + target_height
-
-    canvas = Image.new("RGBA", CANVAS_SIZE, (12, 18, 17, 255))
-    strip = max(6, min(80, target_height // 5))
-    side_strip = max(6, min(80, target_width // 5))
-
-    top_strip = placed.crop((0, 0, target_width, strip))
-    bottom_strip = placed.crop((0, target_height - strip, target_width, target_height))
-    left_strip = placed.crop((0, 0, side_strip, target_height))
-    right_strip = placed.crop((target_width - side_strip, 0, target_width, target_height))
-
-    if top > 0:
-        paste_resized_region(canvas, top_strip, (0, 0, CANVAS_SIZE[0], top + 2))
-    if bottom < CANVAS_SIZE[1]:
-        paste_resized_region(canvas, bottom_strip, (0, bottom - 2, CANVAS_SIZE[0], CANVAS_SIZE[1]))
-    if left > 0:
-        paste_resized_region(canvas, left_strip, (0, top, left + 2, bottom))
-    if right < CANVAS_SIZE[0]:
-        paste_resized_region(canvas, right_strip, (right - 2, top, CANVAS_SIZE[0], bottom))
-
-    placed_layer = placed.copy()
-    placed_layer.putalpha(feathered_alpha(placed.size, feather=72 if is_landscape else 54))
-    canvas.alpha_composite(placed_layer, (left, top))
-
-    # Gentle grading helps the extended pixels read as one continuous frame.
-    canvas = ImageEnhance.Contrast(canvas.convert("RGB")).enhance(1.06).convert("RGBA")
-    fallback_path = WORK_DIR / f"reference-subject-{uuid.uuid4().hex}.png"
-    fallback_path.parent.mkdir(parents=True, exist_ok=True)
-    adjust_subject(canvas).save(fallback_path, "PNG", optimize=True)
-    return fallback_path
 
 
 def draw_title(canvas, title, config):
@@ -859,17 +740,7 @@ def handle_create(script_text, title, subject_path=None, person_reference_path=N
         used_ai = bool(openai_key())
         current_subject_path = subject_path
         if not current_subject_path:
-            if not used_ai and person_reference_path:
-                current_subject_path = build_reference_subject_image(person_reference_path)
-            else:
-                try:
-                    current_subject_path = generate_subject_image(brief, config, person_reference_path=person_reference_path)
-                except Exception as error:
-                    if not person_reference_path:
-                        raise
-                    if progress_callback and show_detailed_progress:
-                        progress_callback(62, "Using the uploaded reference image inside the safe zone...")
-                    current_subject_path = build_reference_subject_image(person_reference_path)
+            current_subject_path = generate_subject_image(brief, config, person_reference_path=person_reference_path)
 
         if progress_callback and show_detailed_progress:
             label = f" {variant_index}/{thumbnail_count}" if thumbnail_count > 1 else ""
