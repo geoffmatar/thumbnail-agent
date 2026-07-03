@@ -33,6 +33,7 @@ GENERATED_DIR = APP_DIR / "generated"
 WORK_DIR = APP_DIR / "work"
 
 OPENAI_ENDPOINT = "https://api.openai.com/v1/responses"
+OPENAI_IMAGES_GENERATE_ENDPOINT = "https://api.openai.com/v1/images/generations"
 OPENAI_IMAGES_EDIT_ENDPOINT = "https://api.openai.com/v1/images/edits"
 PUBLIC_ASSET_PATHS = {
     "/styles.css",
@@ -300,6 +301,25 @@ def openai_image_model():
     return os.environ.get("OPENAI_IMAGE_MODEL", "gpt-image-1")
 
 
+def env_int(name, default):
+    try:
+        return int(os.environ.get(name, str(default)))
+    except (TypeError, ValueError):
+        return default
+
+
+def openai_text_timeout():
+    return env_int("OPENAI_TEXT_TIMEOUT_SECONDS", 180)
+
+
+def openai_image_timeout():
+    return env_int("OPENAI_IMAGE_TIMEOUT_SECONDS", 600)
+
+
+def openai_image_quality():
+    return os.environ.get("OPENAI_IMAGE_QUALITY", "medium").strip() or "medium"
+
+
 def browser_key_setup_allowed():
     return False
 
@@ -318,10 +338,11 @@ def generated_file_path(filename):
     return GENERATED_DIR / Path(filename).name
 
 
-def openai_responses_create(payload, timeout=240):
+def openai_responses_create(payload, timeout=None):
     api_key = openai_key()
     if not api_key:
         raise RuntimeError("Add your OpenAI API key before generating thumbnails.")
+    timeout = timeout or openai_text_timeout()
 
     request = urllib.request.Request(
         OPENAI_ENDPOINT,
@@ -366,10 +387,57 @@ def encode_multipart(fields, files):
     return f"multipart/form-data; boundary={boundary}", bytes(body)
 
 
-def openai_images_edit(prompt, reference_path, timeout=240):
+def extract_image_api_bytes(result, fallback_message):
+    if result.get("data"):
+        first_image = result["data"][0]
+        if first_image.get("b64_json"):
+            return base64.b64decode(first_image["b64_json"])
+        if first_image.get("url"):
+            with urllib.request.urlopen(first_image["url"], timeout=openai_image_timeout()) as image_response:
+                return image_response.read()
+    raise RuntimeError(fallback_message)
+
+
+def openai_images_generate(prompt, timeout=None):
     api_key = openai_key()
     if not api_key:
         raise RuntimeError("Add your OpenAI API key before generating thumbnails.")
+    timeout = timeout or openai_image_timeout()
+
+    payload = {
+        "model": openai_image_model(),
+        "prompt": prompt,
+        "size": "1024x1536",
+        "quality": openai_image_quality(),
+    }
+    request = urllib.request.Request(
+        OPENAI_IMAGES_GENERATE_ENDPOINT,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            result = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as error:
+        body_text = error.read().decode("utf-8", errors="replace")
+        try:
+            message = json.loads(body_text).get("error", {}).get("message") or body_text
+        except json.JSONDecodeError:
+            message = body_text
+        raise RuntimeError(f"OpenAI image generation failed: {message}") from error
+
+    return extract_image_api_bytes(result, "OpenAI image generation did not return generated image data.")
+
+
+def openai_images_edit(prompt, reference_path, timeout=None):
+    api_key = openai_key()
+    if not api_key:
+        raise RuntimeError("Add your OpenAI API key before generating thumbnails.")
+    timeout = timeout or openai_image_timeout()
 
     normalized_path = normalize_reference_image(reference_path)
     content_type = mimetypes.guess_type(str(normalized_path))[0] or "image/png"
@@ -408,14 +476,7 @@ def openai_images_edit(prompt, reference_path, timeout=240):
             message = body_text
         raise RuntimeError(f"OpenAI image edit failed: {message}") from error
 
-    if result.get("data"):
-        first_image = result["data"][0]
-        if first_image.get("b64_json"):
-            return base64.b64decode(first_image["b64_json"])
-        if first_image.get("url"):
-            with urllib.request.urlopen(first_image["url"], timeout=timeout) as image_response:
-                return image_response.read()
-    raise RuntimeError("OpenAI image edit did not return generated image data.")
+    return extract_image_api_bytes(result, "OpenAI image edit did not return generated image data.")
 
 
 def extract_response_text(response):
@@ -443,6 +504,11 @@ def extract_image_base64(response):
 def user_friendly_error(error):
     message = str(error)
     lowered = message.lower()
+    if "timed out" in lowered or "timeout" in lowered:
+        return (
+            "OpenAI took too long to return the image. "
+            "Please try again; if it keeps happening, use a shorter script or try one thumbnail run again later."
+        )
     public_figure_markers = [
         "public figure",
         "recognizable identity",
@@ -521,6 +587,8 @@ def create_visual_brief(script_text, title, config, has_person_reference=False, 
                     "Avoid tight closeups; zoom out and lower the hero subject when needed. "
                     "Central-subject lighting is strict: any main person, vehicle, robot, product, or key object must be well-lit, cinematic, and clearly readable. "
                     f"When a person reference is supplied: {person_reference_prompt(config)} "
+                    "When no person reference is supplied and the script mentions a public figure, do not request an exact recognizable likeness; "
+                    "use a fictional or generic person in the same role and story context instead. "
                     f"Add safe-zone failures to the negative prompt, including: {safe_zone_negative_prompt(config)}. "
                     "Return only JSON matching the schema. Never include text, captions, or logos in the image prompt."
                 ),
@@ -538,6 +606,7 @@ def create_visual_brief(script_text, title, config, has_person_reference=False, 
                             f"{reference_note}"
                             f"{variant_note}"
                             f"{person_reference_prompt(config) if has_person_reference else focus_zone_prompt(config)} "
+                            "If the script names a famous/public person and no person reference is attached, describe a fictional or generic person in the same role, not the exact public figure likeness. "
                             "Do not propose a close-up face crop above the logo; the hero face, object, vehicle, robot, product, or key action must be inside the safe square. "
                             "Keep the lower title area visually calmer but still image-filled.\n\n"
                             f"SCRIPT:\n{script_text[:14000]}"
@@ -581,6 +650,7 @@ def standard_subject_image_prompt(brief, config, negative_prompt):
         "Avoid close-up headshots; zoom out and lower the person so the face and half-body sit inside the central safe square. "
         f"{focus_zone_prompt(config)} "
         "Keep the area behind the title bars lower contrast but still visually present. "
+        "If the script mentions a public figure, do not recreate their exact recognizable identity unless the image policy allows it; use a fictional person in the same role if needed. "
         f"Avoid: {negative_prompt}."
     )
 
@@ -686,10 +756,21 @@ def generate_subject_image(brief, config, person_reference_path=None):
             image_path.write_bytes(image_bytes)
             return image_path
 
+    if not person_reference_path:
+        try:
+            image_bytes = openai_images_generate(prompt)
+            image_path = WORK_DIR / f"subject-{uuid.uuid4().hex}.png"
+            image_path.write_bytes(image_bytes)
+            return image_path
+        except Exception as error:
+            last_error = error
+
     for image_prompt in prompts:
         try:
             payload = image_generation_payload(image_prompt, person_reference_path=person_reference_path)
-            image_bytes = base64.b64decode(extract_image_base64(openai_responses_create(payload)))
+            image_bytes = base64.b64decode(
+                extract_image_base64(openai_responses_create(payload, timeout=openai_image_timeout()))
+            )
             break
         except Exception as error:
             last_error = error
