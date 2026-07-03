@@ -22,7 +22,7 @@ from pathlib import Path
 warnings.filterwarnings("ignore", "'cgi' is deprecated", DeprecationWarning)
 import cgi
 
-from PIL import Image, ImageDraw, ImageEnhance, ImageFont, ImageOps
+from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont, ImageOps
 
 
 APP_DIR = Path(__file__).resolve().parent
@@ -230,9 +230,7 @@ def safe_zone_negative_prompt(config=None):
     return (
         f"face above {config['prompt_name']} logo, head above logo, eyes above logo, face above y={FOCUS_ZONE['y']}, "
         f"head above y={FOCUS_ZONE['y']}, hero above y={FOCUS_ZONE['y']}, important subject above logo, "
-        "tight close-up headshot, cropped forehead near top edge, hero outside safe zone, hero hidden behind logo, "
-        "important object behind logo, dark central subject, underlit main object, flat pasted reference photo, "
-        "reused reference-photo crop, landscape photo crop, giant cropped face from uploaded image"
+        "hero outside safe zone, hero hidden behind logo, important object behind logo, dark central subject, underlit main object"
     )
 
 
@@ -243,14 +241,9 @@ def person_reference_prompt(config=None):
     x2 = FOCUS_ZONE["x"] + FOCUS_ZONE["w"]
     y2 = FOCUS_ZONE["y"] + FOCUS_ZONE["h"]
     return (
-        "PERSON REFERENCE RULE, NON-NEGOTIABLE: the uploaded image is an identity reference only, not a layout, crop, or background. "
-        "Create a new cinematic thumbnail scene featuring that same person as the clear hero subject. "
-        f"The person's face, eyes, full head, shoulders, chest, and upper half-body must be centered inside the safe square "
-        f"x={x1}..{x2}, y={y1}..{y2}, below the {config['prompt_name']} logo area and above the title bars. "
-        f"Place the face center near x=540 and y={y1 + 170}; keep the entire head below y={y1} with clear breathing room under the logo. "
-        "Do not copy the uploaded photo's original framing if it is landscape, close-up, off-center, cropped, or too high. "
-        "Zoom out, lower, and recompose the person as a centered half-body or full-body hero. "
-        "Never paste the uploaded photo flat into the thumbnail, never crop into a giant head, and never let the face or head sit above the logo."
+        "Use the person in the uploaded image as the main subject, with any pose, framing, or scene adjustment needed for the thumbnail. "
+        f"The one mandatory rule is safe-zone placement: the face, head, upper body, and any important hero subject or object must sit inside "
+        f"x={x1}..{x2}, y={y1}..{y2}, below the {config['prompt_name']} logo area and above the title bars."
     )
 
 
@@ -390,12 +383,7 @@ def visual_brief_schema():
 def create_visual_brief(script_text, title, config, has_person_reference=False, variant_index=1, variant_count=1):
     reference_note = ""
     if has_person_reference:
-        reference_note = (
-            "A person reference photo will be supplied to the image generator. "
-            "The generated thumbnail must feature that exact person as the main human subject, preserving their recognizable face, "
-            "hair, age, gender presentation, and overall appearance while placing them into the scene required by the script. "
-            f"{person_reference_prompt(config)} "
-        )
+        reference_note = f"Person reference supplied. {person_reference_prompt(config)} "
     variant_note = ""
     if variant_count > 1:
         variant_note = (
@@ -433,7 +421,7 @@ def create_visual_brief(script_text, title, config, has_person_reference=False, 
                     f"For any human, the entire face/head/eyes must stay below y={FOCUS_ZONE['y']}; never above or overlapping the logo. "
                     "Avoid tight closeups; zoom out and lower the hero subject when needed. "
                     "Central-subject lighting is strict: any main person, vehicle, robot, product, or key object must be well-lit, cinematic, and clearly readable. "
-                    f"When a person reference is supplied, it is identity-only and must follow this rule exactly: {person_reference_prompt(config)} "
+                    f"When a person reference is supplied: {person_reference_prompt(config)} "
                     f"Add safe-zone failures to the negative prompt, including: {safe_zone_negative_prompt(config)}. "
                     "Return only JSON matching the schema. Never include text, captions, or logos in the image prompt."
                 ),
@@ -450,7 +438,7 @@ def create_visual_brief(script_text, title, config, has_person_reference=False, 
                             "Avoid black voids, blank poster space, title-card layouts, or large empty areas. "
                             f"{reference_note}"
                             f"{variant_note}"
-                            f"{focus_zone_prompt(config)} "
+                            f"{person_reference_prompt(config) if has_person_reference else focus_zone_prompt(config)} "
                             "Do not propose a close-up face crop above the logo; the hero face, object, vehicle, robot, product, or key action must be inside the safe square. "
                             "Keep the lower title area visually calmer but still image-filled.\n\n"
                             f"SCRIPT:\n{script_text[:14000]}"
@@ -504,24 +492,19 @@ def person_reference_image_prompt(brief, config, negative_prompt, retry=False):
     x2 = FOCUS_ZONE["x"] + FOCUS_ZONE["w"]
     y2 = FOCUS_ZONE["y"] + FOCUS_ZONE["h"]
     scene_idea = " ".join((brief.get("visual_prompt") or "").split())
-    scene_idea = scene_idea[:900 if retry else 1800]
+    scene_idea = scene_idea[:500 if retry else 900]
     retry_note = (
-        "Retry with a simpler, cleaner composition. "
+        "Retry with a very simple composition. "
         if retry
         else ""
     )
     return (
-        f"{retry_note}Create a new vertical 9:16 full-bleed cinematic thumbnail image.\n\n"
-        f"Scene idea: {scene_idea}\n\n"
-        "Use the attached person photo only as an identity reference for the main person. "
-        "Preserve the person's recognizable face, hair, age, and overall look, but create a new scene and new pose. "
-        "Do not paste the uploaded photo, do not reuse its background, and do not copy its original crop or camera framing. "
-        f"SAFE ZONE: on a 1080x1920 canvas, place the person as a centered half-body or full-body hero inside x={x1}..{x2}, y={y1}..{y2}. "
-        f"Put the face center near x=540 and y={y1 + 170}. The entire head, eyes, and face must be below y={y1}, below the {config['prompt_name']} logo area, "
-        "with clear breathing room between the logo area and the head. "
-        "Avoid tight close-up headshots; zoom out and lower the person so the face, shoulders, chest, and important body language sit in the safe square. "
-        "The image must fill the full frame with real environment, depth, and action. The main person must be well-lit, cinematic, sharp, and high-contrast. "
-        "No text, no readable letters, no logos, no watermarks, no title bars. "
+        f"{retry_note}Create a vertical 9:16 full-bleed cinematic thumbnail image. "
+        f"Scene idea: {scene_idea} "
+        "Use the person in the attached image as the main subject. You may change the pose, scene, scale, and framing to make the thumbnail work. "
+        f"Only composition rule: keep the person's face, head, upper body, and any important subject or object inside the safe zone x={x1}..{x2}, y={y1}..{y2}, "
+        f"below the {config['prompt_name']} logo area and above the title bars. "
+        "Make the subject well-lit, sharp, cinematic, and clearly readable. Fill the entire frame. No text, readable letters, logos, watermarks, or title bars. "
         f"Avoid: {negative_prompt}."
     )
 
@@ -644,6 +627,38 @@ def adjust_subject(image):
     return image.convert("RGBA")
 
 
+def build_reference_subject_image(reference_path):
+    source = Image.open(reference_path).convert("RGBA")
+    background = fit_cover(source, CANVAS_SIZE)
+    background = background.filter(ImageFilter.GaussianBlur(20))
+    background = ImageEnhance.Brightness(background.convert("RGB")).enhance(0.82).convert("RGBA")
+
+    source_w, source_h = source.size
+    is_landscape = source_w >= source_h
+    target_width = CANVAS_SIZE[0] if is_landscape else min(CANVAS_SIZE[0], 900)
+    target_height = max(1, round(source_h * target_width / source_w))
+    if target_height < FOCUS_ZONE["h"]:
+        scale_up = FOCUS_ZONE["h"] / target_height
+        target_width = min(CANVAS_SIZE[0], round(target_width * scale_up))
+        target_height = max(1, round(source_h * target_width / source_w))
+
+    foreground = source.resize((target_width, target_height), Image.Resampling.LANCZOS)
+    target_face_y = FOCUS_ZONE["y"] + 190
+    estimated_face_ratio = 0.28 if is_landscape else 0.25
+    top = round(target_face_y - target_height * estimated_face_ratio)
+    top = max(0, min(top, BOTTOM_BAND["y"] - 80))
+    left = round((CANVAS_SIZE[0] - target_width) / 2)
+
+    canvas = Image.new("RGBA", CANVAS_SIZE, (0, 0, 0, 255))
+    canvas.alpha_composite(background)
+    canvas.alpha_composite(foreground, (left, top))
+
+    fallback_path = WORK_DIR / f"reference-subject-{uuid.uuid4().hex}.png"
+    fallback_path.parent.mkdir(parents=True, exist_ok=True)
+    adjust_subject(canvas).save(fallback_path, "PNG", optimize=True)
+    return fallback_path
+
+
 def draw_title(canvas, title, config):
     top_text, bottom_text = split_title(title)
     title_lines = [top_text, bottom_text]
@@ -757,16 +772,16 @@ def handle_create(script_text, title, subject_path=None, person_reference_path=N
         current_subject_path = subject_path
         if not current_subject_path:
             if not used_ai and person_reference_path:
-                raise RuntimeError("OpenAI image generation is required when using a person reference image.")
+                current_subject_path = build_reference_subject_image(person_reference_path)
             else:
                 try:
                     current_subject_path = generate_subject_image(brief, config, person_reference_path=person_reference_path)
                 except Exception as error:
                     if not person_reference_path:
                         raise
-                    raise RuntimeError(
-                        f"Could not generate a new thumbnail scene from the person reference. Try again with a clearer reference image. Details: {error}"
-                    ) from error
+                    if progress_callback and show_detailed_progress:
+                        progress_callback(62, "Using the uploaded reference image inside the safe zone...")
+                    current_subject_path = build_reference_subject_image(person_reference_path)
 
         if progress_callback and show_detailed_progress:
             label = f" {variant_index}/{thumbnail_count}" if thumbnail_count > 1 else ""
