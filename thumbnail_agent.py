@@ -471,13 +471,16 @@ def create_visual_brief(script_text, title, config, has_person_reference=False, 
     return json.loads(extract_response_text(openai_responses_create(payload)))
 
 
-def generate_subject_image(brief, config, person_reference_path=None):
-    negative_prompt = " ".join(
+def combined_negative_prompt(brief, config):
+    return " ".join(
         part.strip()
         for part in [brief.get("negative_prompt", ""), safe_zone_negative_prompt(config)]
         if part and part.strip()
     )
-    prompt = (
+
+
+def standard_subject_image_prompt(brief, config, negative_prompt):
+    return (
         f"{brief['visual_prompt']}\n\n"
         "Hard requirements: vertical 9:16, full-bleed image, no text, no readable letters, no logos, no watermarks. "
         "The scene must fill the entire canvas from top to bottom. Do not make a mostly black image. "
@@ -493,21 +496,70 @@ def generate_subject_image(brief, config, person_reference_path=None):
         "Keep the area behind the title bars lower contrast but still visually present. "
         f"Avoid: {negative_prompt}."
     )
+
+
+def person_reference_image_prompt(brief, config, negative_prompt, retry=False):
+    x1 = FOCUS_ZONE["x"]
+    y1 = FOCUS_ZONE["y"]
+    x2 = FOCUS_ZONE["x"] + FOCUS_ZONE["w"]
+    y2 = FOCUS_ZONE["y"] + FOCUS_ZONE["h"]
+    scene_idea = " ".join((brief.get("visual_prompt") or "").split())
+    scene_idea = scene_idea[:900 if retry else 1800]
+    retry_note = (
+        "Retry with a simpler, cleaner composition. "
+        if retry
+        else ""
+    )
+    return (
+        f"{retry_note}Create a new vertical 9:16 full-bleed cinematic thumbnail image.\n\n"
+        f"Scene idea: {scene_idea}\n\n"
+        "Use the attached person photo only as an identity reference for the main person. "
+        "Preserve the person's recognizable face, hair, age, and overall look, but create a new scene and new pose. "
+        "Do not paste the uploaded photo, do not reuse its background, and do not copy its original crop or camera framing. "
+        f"SAFE ZONE: on a 1080x1920 canvas, place the person as a centered half-body or full-body hero inside x={x1}..{x2}, y={y1}..{y2}. "
+        f"Put the face center near x=540 and y={y1 + 170}. The entire head, eyes, and face must be below y={y1}, below the {config['prompt_name']} logo area, "
+        "with clear breathing room between the logo area and the head. "
+        "Avoid tight close-up headshots; zoom out and lower the person so the face, shoulders, chest, and important body language sit in the safe square. "
+        "The image must fill the full frame with real environment, depth, and action. The main person must be well-lit, cinematic, sharp, and high-contrast. "
+        "No text, no readable letters, no logos, no watermarks, no title bars. "
+        f"Avoid: {negative_prompt}."
+    )
+
+
+def image_generation_payload(prompt, person_reference_path=None):
     content = [{"type": "input_text", "text": prompt}]
     if person_reference_path:
         content.append({"type": "input_image", "image_url": image_data_url(person_reference_path)})
-        content[0]["text"] += (
-            "\n\nUse the attached person reference photo as the identity reference for the main human subject. "
-            "Preserve the person's recognizable facial identity and upper-body appearance, but place them naturally into the generated scene. "
-            f"{person_reference_prompt(config)} "
-            "The uploaded photo is a reference only; do not recreate it as a flat pasted photo or reuse its original crop."
-        )
-    payload = {
+    return {
         "model": openai_model(),
         "input": [{"role": "user", "content": content}],
         "tools": [{"type": "image_generation", "action": "generate"}],
     }
-    image_bytes = base64.b64decode(extract_image_base64(openai_responses_create(payload)))
+
+
+def generate_subject_image(brief, config, person_reference_path=None):
+    negative_prompt = combined_negative_prompt(brief, config)
+    prompt = (
+        person_reference_image_prompt(brief, config, negative_prompt)
+        if person_reference_path
+        else standard_subject_image_prompt(brief, config, negative_prompt)
+    )
+
+    prompts = [prompt]
+    if person_reference_path:
+        prompts.append(person_reference_image_prompt(brief, config, negative_prompt, retry=True))
+
+    last_error = None
+    for image_prompt in prompts:
+        try:
+            payload = image_generation_payload(image_prompt, person_reference_path=person_reference_path)
+            image_bytes = base64.b64decode(extract_image_base64(openai_responses_create(payload)))
+            break
+        except Exception as error:
+            last_error = error
+    else:
+        raise last_error or RuntimeError("The model did not return generated image data.")
+
     image_path = WORK_DIR / f"subject-{uuid.uuid4().hex}.png"
     image_path.write_bytes(image_bytes)
     return image_path
