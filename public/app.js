@@ -12,8 +12,6 @@ const studioLogo = document.querySelector("#studioLogo");
 const studioTitle = document.querySelector("#studioTitle");
 const titleInput = document.querySelector("#titleInput");
 const scriptText = document.querySelector("#scriptText");
-const personReference = document.querySelector("#personReference");
-const referenceFileName = document.querySelector("#referenceFileName");
 const resultsList = document.querySelector("#resultsList");
 const progressPanel = document.querySelector("#progressPanel");
 const progressLabel = document.querySelector("#progressLabel");
@@ -77,7 +75,6 @@ const clientStates = Object.fromEntries(
     {
       title: "",
       script: "",
-      personReferenceFile: null,
       progress: null,
       progressStartedAt: 0,
       running: false,
@@ -165,14 +162,6 @@ function setStatus(message, isError = false, clientSlug = currentClient) {
   state.statusMessage = message;
   state.statusIsError = isError;
   renderStatus(clientSlug);
-}
-
-function renderReferenceState(clientSlug = currentClient) {
-  if (clientSlug !== currentClient) return;
-  const state = getClientState(clientSlug);
-  referenceFileName.textContent = state.personReferenceFile
-    ? state.personReferenceFile.name
-    : "Upload image";
 }
 
 function resultItems(result) {
@@ -341,8 +330,6 @@ function hydrateClientState(clientSlug) {
   const state = getClientState(clientSlug);
   titleInput.value = state.title;
   scriptText.value = state.script;
-  personReference.value = "";
-  renderReferenceState(clientSlug);
   renderResultState(clientSlug);
   renderProgress(clientSlug);
   renderStatus(clientSlug);
@@ -411,13 +398,6 @@ function previewThumbnailWithKeyboard(event) {
   openImagePreview(previewWrap);
 }
 
-function updateReferenceFileName() {
-  const file = personReference.files && personReference.files[0];
-  const state = getClientState();
-  state.personReferenceFile = file || null;
-  renderReferenceState();
-}
-
 async function loadStatus(clientSlug = currentClient) {
   try {
     const status = await readJson(`/api/status?client=${encodeURIComponent(clientSlug)}`);
@@ -466,9 +446,6 @@ async function createThumbnail() {
   form.append("client", jobClient);
   form.append("title", title);
   form.append("script", script);
-  if (state.personReferenceFile) {
-    form.append("person_reference", state.personReferenceFile);
-  }
 
   state.result = null;
   updateCreateButtonState();
@@ -522,7 +499,6 @@ titleInput.addEventListener("input", () => {
 scriptText.addEventListener("input", () => {
   getClientState().script = scriptText.value;
 });
-personReference.addEventListener("change", updateReferenceFileName);
 resultsList.addEventListener("click", downloadThumbnail);
 resultsList.addEventListener("click", previewThumbnail);
 resultsList.addEventListener("keydown", previewThumbnailWithKeyboard);

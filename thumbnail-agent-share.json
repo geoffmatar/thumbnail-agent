@@ -1,6 +1,6 @@
 {
   "name": "Thumbnail Agent",
-  "description": "Internal thumbnail generator with brand-specific thumbnail agents, fixed templates, fixed fonts, script-based image generation, optional person reference upload, and PNG download.",
+  "description": "Internal thumbnail generator with brand-specific thumbnail agents, fixed templates, fixed fonts, script-based image generation, and PNG download.",
   "repository": {
     "url": "https://github.com/geoffmatar/thumbnail-agent.git",
     "branch": "main"
@@ -35,7 +35,6 @@
     "Choose a thumbnail agent.",
     "Enter the title.",
     "Paste the script.",
-    "Optionally upload a person reference image if the thumbnail needs a specific person.",
     "Click Create Thumbnail.",
     "Download the PNG when finished."
   ]

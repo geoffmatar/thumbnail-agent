@@ -690,7 +690,7 @@ body.siyata-mode #progressLabel {
 
 .control-panel {
   display: grid;
-  grid-template-rows: var(--form-top-height) calc(var(--form-work-height) - 142px) 126px;
+  grid-template-rows: var(--form-top-height) var(--form-work-height);
   gap: 16px;
   padding: 18px;
 }
@@ -703,75 +703,6 @@ body.siyata-mode #progressLabel {
 .dropzone span {
   font-weight: 850;
   color: #ffffff;
-}
-
-.reference-card {
-  position: relative;
-  grid-template-rows: auto minmax(48px, 1fr) auto;
-  min-height: 126px;
-  height: 126px;
-  cursor: pointer;
-}
-
-.reference-card:hover,
-.reference-card:focus-within {
-  border-color: rgba(18, 216, 195, 0.5);
-  background:
-    linear-gradient(180deg, rgba(18, 216, 195, 0.12), rgba(255, 255, 255, 0.045)),
-    rgba(255, 255, 255, 0.045);
-}
-
-body.alliance-mode .reference-card:hover,
-body.alliance-mode .reference-card:focus-within {
-  border-color: rgba(247, 87, 30, 0.55);
-  background:
-    linear-gradient(180deg, rgba(255, 230, 211, 0.92), rgba(246, 205, 173, 0.8)),
-    rgba(255, 243, 232, 0.62);
-}
-
-body.alliance-black-mode .reference-card:hover,
-body.alliance-black-mode .reference-card:focus-within {
-  border-color: rgba(229, 158, 99, 0.58);
-  background:
-    linear-gradient(180deg, rgba(229, 158, 99, 0.12), rgba(255, 255, 255, 0.045)),
-    rgba(255, 244, 234, 0.05);
-}
-
-body.siyata-mode .reference-card:hover,
-body.siyata-mode .reference-card:focus-within {
-  border-color: rgba(43, 148, 181, 0.6);
-  background:
-    linear-gradient(180deg, rgba(28, 135, 168, 0.16), rgba(255, 255, 255, 0.045)),
-    rgba(255, 255, 255, 0.045);
-}
-
-.reference-card input {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-  pointer-events: none;
-}
-
-#referenceFileName {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.reference-button {
-  display: inline-grid;
-  width: 100%;
-  min-height: 48px;
-  place-items: center;
-  padding: 0 13px;
-  color: rgba(245, 248, 244, 0.66);
-  background: rgba(0, 0, 0, 0.42);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 8px;
-  font-size: 16px;
-  font-weight: 400;
-  line-height: 1;
 }
 
 .grid {
@@ -834,7 +765,6 @@ textarea {
 
 body.alliance-mode .title-card input,
 body.alliance-mode textarea,
-body.alliance-mode .reference-button,
 body.alliance-mode .preview-wrap {
   color: var(--text);
   background: rgba(255, 250, 244, 0.72);
@@ -843,7 +773,6 @@ body.alliance-mode .preview-wrap {
 
 body.alliance-black-mode .title-card input,
 body.alliance-black-mode textarea,
-body.alliance-black-mode .reference-button,
 body.alliance-black-mode .preview-wrap {
   color: var(--text);
   background: rgba(12, 9, 8, 0.62);
@@ -852,7 +781,6 @@ body.alliance-black-mode .preview-wrap {
 
 body.siyata-mode .title-card input,
 body.siyata-mode textarea,
-body.siyata-mode .reference-button,
 body.siyata-mode .preview-wrap {
   color: var(--text);
   background: rgba(0, 0, 0, 0.54);
@@ -860,20 +788,17 @@ body.siyata-mode .preview-wrap {
 }
 
 body.alliance-mode .title-card input::placeholder,
-body.alliance-mode textarea::placeholder,
-body.alliance-mode .reference-button {
+body.alliance-mode textarea::placeholder {
   color: rgba(53, 37, 30, 0.52);
 }
 
 body.alliance-black-mode .title-card input::placeholder,
-body.alliance-black-mode textarea::placeholder,
-body.alliance-black-mode .reference-button {
+body.alliance-black-mode textarea::placeholder {
   color: rgba(255, 248, 240, 0.5);
 }
 
 body.siyata-mode .title-card input::placeholder,
-body.siyata-mode textarea::placeholder,
-body.siyata-mode .reference-button {
+body.siyata-mode textarea::placeholder {
   color: rgba(248, 251, 255, 0.54);
 }
 
@@ -906,12 +831,11 @@ textarea {
 
 .script-card {
   grid-template-rows: auto minmax(0, 1fr);
-  min-height: calc(var(--form-work-height) - 142px);
-  height: calc(var(--form-work-height) - 142px);
+  min-height: var(--form-work-height);
+  height: var(--form-work-height);
 }
 
 .title-card input:focus,
-.reference-card:focus-within .reference-button,
 textarea:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-soft);
@@ -1428,14 +1352,6 @@ body.alliance-lgbtq-mode #progressLabel {
   color: var(--text);
 }
 
-body.alliance-lgbtq-mode .reference-card:hover,
-body.alliance-lgbtq-mode .reference-card:focus-within {
-  border-color: rgba(237, 49, 134, 0.48);
-  background:
-    linear-gradient(180deg, rgba(255, 247, 220, 0.78), rgba(255, 235, 248, 0.74)),
-    rgba(255, 255, 255, 0.42);
-}
-
 body.alliance-lgbtq-mode .dropzone {
   background:
     linear-gradient(180deg, rgba(255, 249, 231, 0.76), rgba(255, 237, 248, 0.62)),
@@ -1445,7 +1361,6 @@ body.alliance-lgbtq-mode .dropzone {
 
 body.alliance-lgbtq-mode .title-card input,
 body.alliance-lgbtq-mode textarea,
-body.alliance-lgbtq-mode .reference-button,
 body.alliance-lgbtq-mode .preview-wrap {
   color: var(--text);
   background: rgba(255, 255, 255, 0.7);
@@ -1453,8 +1368,7 @@ body.alliance-lgbtq-mode .preview-wrap {
 }
 
 body.alliance-lgbtq-mode .title-card input::placeholder,
-body.alliance-lgbtq-mode textarea::placeholder,
-body.alliance-lgbtq-mode .reference-button {
+body.alliance-lgbtq-mode textarea::placeholder {
   color: rgba(48, 36, 58, 0.5);
 }
 
@@ -1630,7 +1544,6 @@ body.alliance-lgbtq-mode .secondary-btn {
   }
 
   .title-card,
-  .reference-card,
   .progress-panel,
   .create-panel,
   .script-card,

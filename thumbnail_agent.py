@@ -2,12 +2,10 @@
 import argparse
 import base64
 import concurrent.futures
-import io
 import json
 import mimetypes
 import os
 import re
-import shutil
 import sys
 import threading
 import time
@@ -22,7 +20,7 @@ from pathlib import Path
 warnings.filterwarnings("ignore", "'cgi' is deprecated", DeprecationWarning)
 import cgi
 
-from PIL import Image, ImageChops, ImageDraw, ImageEnhance, ImageFilter, ImageFont, ImageOps
+from PIL import Image, ImageDraw, ImageEnhance, ImageFont, ImageOps
 
 
 APP_DIR = Path(__file__).resolve().parent
@@ -34,7 +32,6 @@ WORK_DIR = APP_DIR / "work"
 
 OPENAI_ENDPOINT = "https://api.openai.com/v1/responses"
 OPENAI_IMAGES_GENERATE_ENDPOINT = "https://api.openai.com/v1/images/generations"
-OPENAI_IMAGES_EDIT_ENDPOINT = "https://api.openai.com/v1/images/edits"
 PUBLIC_ASSET_PATHS = {
     "/styles.css",
     "/app.js",
@@ -236,19 +233,6 @@ def safe_zone_negative_prompt(config=None):
     )
 
 
-def person_reference_prompt(config=None):
-    config = config or get_client_config(DEFAULT_CLIENT)
-    x1 = FOCUS_ZONE["x"]
-    y1 = FOCUS_ZONE["y"]
-    x2 = FOCUS_ZONE["x"] + FOCUS_ZONE["w"]
-    y2 = FOCUS_ZONE["y"] + FOCUS_ZONE["h"]
-    return (
-        "Use the person in the uploaded image as the main subject, with any pose, framing, or scene adjustment needed for the thumbnail. "
-        f"The one mandatory rule is safe-zone placement: the face, head, upper body, and any important hero subject or object must sit inside "
-        f"x={x1}..{x2}, y={y1}..{y2}, below the {config['prompt_name']} logo area and above the title bars."
-    )
-
-
 def ensure_dirs():
     for path in [ASSETS_DIR, STATE_DIR, GENERATED_DIR, WORK_DIR]:
         path.mkdir(parents=True, exist_ok=True)
@@ -365,28 +349,6 @@ def openai_responses_create(payload, timeout=None):
         raise RuntimeError(f"OpenAI request failed: {message}") from error
 
 
-def encode_multipart(fields, files):
-    boundary = f"----thumbnail-agent-{uuid.uuid4().hex}"
-    body = bytearray()
-    for name, value in fields.items():
-        body.extend(f"--{boundary}\r\n".encode("utf-8"))
-        body.extend(f'Content-Disposition: form-data; name="{name}"\r\n\r\n'.encode("utf-8"))
-        body.extend(str(value).encode("utf-8"))
-        body.extend(b"\r\n")
-    for name, filename, content_type, data in files:
-        body.extend(f"--{boundary}\r\n".encode("utf-8"))
-        body.extend(
-            (
-                f'Content-Disposition: form-data; name="{name}"; filename="{filename}"\r\n'
-                f"Content-Type: {content_type}\r\n\r\n"
-            ).encode("utf-8")
-        )
-        body.extend(data)
-        body.extend(b"\r\n")
-    body.extend(f"--{boundary}--\r\n".encode("utf-8"))
-    return f"multipart/form-data; boundary={boundary}", bytes(body)
-
-
 def extract_image_api_bytes(result, fallback_message):
     if result.get("data"):
         first_image = result["data"][0]
@@ -433,52 +395,6 @@ def openai_images_generate(prompt, timeout=None):
     return extract_image_api_bytes(result, "OpenAI image generation did not return generated image data.")
 
 
-def openai_images_edit(prompt, reference_path, timeout=None):
-    api_key = openai_key()
-    if not api_key:
-        raise RuntimeError("Add your OpenAI API key before generating thumbnails.")
-    timeout = timeout or openai_image_timeout()
-
-    normalized_path = normalize_reference_image(reference_path)
-    content_type = mimetypes.guess_type(str(normalized_path))[0] or "image/png"
-    multipart_type, body = encode_multipart(
-        {
-            "model": openai_image_model(),
-            "prompt": prompt,
-            "size": "1024x1536",
-        },
-        [
-            (
-                "image",
-                normalized_path.name,
-                content_type,
-                normalized_path.read_bytes(),
-            )
-        ],
-    )
-    request = urllib.request.Request(
-        OPENAI_IMAGES_EDIT_ENDPOINT,
-        data=body,
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": multipart_type,
-        },
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            result = json.loads(response.read().decode("utf-8"))
-    except urllib.error.HTTPError as error:
-        body_text = error.read().decode("utf-8", errors="replace")
-        try:
-            message = json.loads(body_text).get("error", {}).get("message") or body_text
-        except json.JSONDecodeError:
-            message = body_text
-        raise RuntimeError(f"OpenAI image edit failed: {message}") from error
-
-    return extract_image_api_bytes(result, "OpenAI image edit did not return generated image data.")
-
-
 def extract_response_text(response):
     if isinstance(response.get("output_text"), str):
         return response["output_text"]
@@ -509,17 +425,6 @@ def user_friendly_error(error):
             "OpenAI took too long to return the image. "
             "Please try again; if it keeps happening, use a shorter script or try one thumbnail run again later."
         )
-    public_figure_markers = [
-        "public figure",
-        "recognizable identity",
-        "reference photo",
-    ]
-    if all(marker in lowered for marker in public_figure_markers):
-        return (
-            "This reference image appears to be a public figure. "
-            "OpenAI will not recreate a recognizable public figure from an uploaded photo. "
-            "Remove the reference image, or upload a non-public person the team has permission to use."
-        )
     return message
 
 
@@ -545,10 +450,7 @@ def visual_brief_schema():
     }
 
 
-def create_visual_brief(script_text, title, config, has_person_reference=False, variant_index=1, variant_count=1):
-    reference_note = ""
-    if has_person_reference:
-        reference_note = f"Person reference supplied. {person_reference_prompt(config)} "
+def create_visual_brief(script_text, title, config, variant_index=1, variant_count=1):
     variant_note = ""
     if variant_count > 1:
         variant_note = (
@@ -560,7 +462,6 @@ def create_visual_brief(script_text, title, config, has_person_reference=False, 
         return {
             "visual_prompt": (
                 "Create a vertical 9:16 full-frame editorial thumbnail image based on the script. "
-                f"{reference_note}"
                 f"{variant_note}"
                 f"No text, no captions, no logos, no black empty poster space. {focus_zone_prompt(config)}"
             ),
@@ -586,8 +487,7 @@ def create_visual_brief(script_text, title, config, has_person_reference=False, 
                     f"For any human, the entire face/head/eyes must stay below y={FOCUS_ZONE['y']}; never above or overlapping the logo. "
                     "Avoid tight closeups; zoom out and lower the hero subject when needed. "
                     "Central-subject lighting is strict: any main person, vehicle, robot, product, or key object must be well-lit, cinematic, and clearly readable. "
-                    f"When a person reference is supplied: {person_reference_prompt(config)} "
-                    "When no person reference is supplied and the script mentions a public figure, do not request an exact recognizable likeness; "
+                    "When the script mentions a public figure, do not request an exact recognizable likeness; "
                     "use a fictional or generic person in the same role and story context instead. "
                     f"Add safe-zone failures to the negative prompt, including: {safe_zone_negative_prompt(config)}. "
                     "Return only JSON matching the schema. Never include text, captions, or logos in the image prompt."
@@ -603,10 +503,9 @@ def create_visual_brief(script_text, title, config, has_person_reference=False, 
                             "Create only the subject/background image prompt for this script. "
                             f"The final image must be full-frame 9:16 and fill the whole thumbnail behind a {config['template_context']}. "
                             "Avoid black voids, blank poster space, title-card layouts, or large empty areas. "
-                            f"{reference_note}"
                             f"{variant_note}"
-                            f"{person_reference_prompt(config) if has_person_reference else focus_zone_prompt(config)} "
-                            "If the script names a famous/public person and no person reference is attached, describe a fictional or generic person in the same role, not the exact public figure likeness. "
+                            f"{focus_zone_prompt(config)} "
+                            "If the script names a famous/public person, describe a fictional or generic person in the same role, not the exact public figure likeness. "
                             "Do not propose a close-up face crop above the logo; the hero face, object, vehicle, robot, product, or key action must be inside the safe square. "
                             "Keep the lower title area visually calmer but still image-filled.\n\n"
                             f"SCRIPT:\n{script_text[:14000]}"
@@ -655,61 +554,8 @@ def standard_subject_image_prompt(brief, config, negative_prompt):
     )
 
 
-def person_reference_image_prompt(brief, config, negative_prompt, retry=False):
-    x1 = FOCUS_ZONE["x"]
-    y1 = FOCUS_ZONE["y"]
-    x2 = FOCUS_ZONE["x"] + FOCUS_ZONE["w"]
-    y2 = FOCUS_ZONE["y"] + FOCUS_ZONE["h"]
-    reference_rule = (
-        "PERSON REFERENCE RULE: Generate the same type of full-frame cinematic script-based image you would create with no reference image. "
-        "The only difference is that the main person/hero must be the same person from the attached reference image. "
-        "Use the attached image as identity reference only: preserve the person's recognizable face, hair, body type, and overall look. "
-        "Do not copy/paste the uploaded photo, do not keep the uploaded photo background, do not make a collage, and do not create a rectangular photo strip. "
-        "The pose, scale, clothing, lighting, camera angle, and background may change naturally to fit the script and thumbnail. "
-        "Do not replace the person with a random similar-looking person. "
-        f"Safe-zone placement is mandatory: keep the person's face, head, upper body, and any important subject or object inside x={x1}..{x2}, y={y1}..{y2}, "
-        f"below the {config['prompt_name']} logo area and above the title bars."
-    )
-    if retry:
-        return (
-            f"{standard_subject_image_prompt(brief, config, negative_prompt)}\n\n"
-            "Retry with a simpler composition and a cleaner full-body or half-body framing. "
-            f"{reference_rule}"
-        )
-    return f"{standard_subject_image_prompt(brief, config, negative_prompt)}\n\n{reference_rule}"
-
-
-def person_reference_edit_prompt(brief, config, negative_prompt, retry=False):
-    x1 = FOCUS_ZONE["x"]
-    y1 = FOCUS_ZONE["y"]
-    x2 = FOCUS_ZONE["x"] + FOCUS_ZONE["w"]
-    y2 = FOCUS_ZONE["y"] + FOCUS_ZONE["h"]
-    retry_line = (
-        "This is a retry: make the composition simpler, use a clean centered half-body or full-body hero, and avoid complex cropping. "
-        if retry
-        else ""
-    )
-    return (
-        f"{brief['visual_prompt']}\n\n"
-        f"{retry_line}"
-        "Create a brand-new full-frame vertical 9:16 cinematic thumbnail subject image from the script. "
-        "Use the uploaded image only as the identity reference for the main person. "
-        "The main person must be the same recognizable person from the uploaded image, but the pose, clothing, expression, lighting, camera angle, and background may change to fit the script. "
-        "Do not paste the uploaded photo into the canvas. Do not preserve the uploaded photo background. Do not create a collage, photo strip, duplicated blurred background, or visible image seam. "
-        "Fill the entire canvas with one natural, coherent scene from top to bottom. "
-        "No text, no readable letters, no logos, no watermarks. "
-        f"SAFE ZONE RULE: place the person's face, head, eyes, upper body, and any important hero object inside x={x1}..{x2}, y={y1}..{y2}. "
-        f"The face and important subject must be below the {config['prompt_name']} logo area and above the title bars. "
-        "If the reference person is an athlete, presenter, politician, creator, or worker, create a cinematic new scene where that person is the centered hero in the safe zone. "
-        "The hero subject must be well-lit, sharp, cinematic, and clearly readable. "
-        f"Avoid: {negative_prompt}."
-    )
-
-
-def image_generation_payload(prompt, person_reference_path=None):
+def image_generation_payload(prompt):
     content = [{"type": "input_text", "text": prompt}]
-    if person_reference_path:
-        content.append({"type": "input_image", "image_url": image_data_url(person_reference_path)})
     return {
         "model": openai_model(),
         "input": [{"role": "user", "content": content}],
@@ -717,259 +563,7 @@ def image_generation_payload(prompt, person_reference_path=None):
     }
 
 
-def normalize_reference_image(path):
-    image = ImageOps.exif_transpose(Image.open(path)).convert("RGB")
-    image.thumbnail((1536, 1536), Image.Resampling.LANCZOS)
-    normalized_path = WORK_DIR / f"reference-{uuid.uuid4().hex}.png"
-    normalized_path.parent.mkdir(parents=True, exist_ok=True)
-    image.save(normalized_path, "PNG", optimize=True)
-    return normalized_path
-
-
-def reference_background_prompt(brief, config, negative_prompt):
-    x1 = FOCUS_ZONE["x"]
-    y1 = FOCUS_ZONE["y"]
-    x2 = FOCUS_ZONE["x"] + FOCUS_ZONE["w"]
-    y2 = FOCUS_ZONE["y"] + FOCUS_ZONE["h"]
-    return (
-        f"{brief['visual_prompt']}\n\n"
-        "Create the cinematic thumbnail environment only. The app will place the real uploaded person photo afterward. "
-        "Do not include any people, faces, bodies, portraits, silhouettes, characters, text, readable letters, logos, or watermarks. "
-        "Fill the full vertical 9:16 canvas with a real, detailed, cinematic scene from top to bottom. "
-        "Keep the central safe square clear and visually useful for a real person layer: "
-        f"x={x1}..{x2}, y={y1}..{y2}. "
-        f"That safe square is below the {config['prompt_name']} logo area and above the title bars. "
-        "Use depth, atmosphere, props, lighting, and background action that support the script, but leave room for the real person to be the hero. "
-        "The central safe square must be well-lit with cinematic key light and subtle rim light so the real person remains clear. "
-        "Keep the lower title-bar area lower contrast but still visually present. "
-        f"Avoid: {negative_prompt}."
-    )
-
-
-def generate_reference_background(brief, config):
-    negative_prompt = combined_negative_prompt(brief, config)
-    prompt = reference_background_prompt(brief, config, negative_prompt)
-    last_error = None
-    try:
-        image_bytes = openai_images_generate(prompt)
-    except Exception as error:
-        last_error = error
-    else:
-        image_path = WORK_DIR / f"subject-background-{uuid.uuid4().hex}.png"
-        image_path.write_bytes(image_bytes)
-        return image_path
-
-    try:
-        payload = image_generation_payload(prompt)
-        image_bytes = base64.b64decode(
-            extract_image_base64(openai_responses_create(payload, timeout=openai_image_timeout()))
-        )
-    except Exception as error:
-        raise error from last_error
-
-    image_path = WORK_DIR / f"subject-background-{uuid.uuid4().hex}.png"
-    image_path.write_bytes(image_bytes)
-    return image_path
-
-
-def reference_photo_crop_box(image):
-    width, height = image.size
-    if height >= width:
-        return (
-            int(width * 0.14),
-            int(height * 0.07),
-            int(width * 0.86),
-            int(height * 0.88),
-        )
-    return (
-        int(width * 0.03),
-        int(height * 0.02),
-        int(width * 0.97),
-        int(height * 0.96),
-    )
-
-
-def soft_reference_mask(size):
-    width, height = size
-    mask = Image.new("L", size, 0)
-    draw = ImageDraw.Draw(mask)
-    if height >= width:
-        feather = max(16, int(min(width, height) * 0.055))
-        draw.ellipse(
-            (
-                int(width * 0.01),
-                -int(height * 0.04),
-                int(width * 0.99),
-                int(height * 1.03),
-            ),
-            fill=255,
-        )
-        mask = mask.filter(ImageFilter.GaussianBlur(feather))
-        draw = ImageDraw.Draw(mask)
-        draw.ellipse(
-            (
-                int(width * 0.11),
-                int(height * 0.03),
-                int(width * 0.89),
-                int(height * 0.88),
-            ),
-            fill=255,
-        )
-        return mask
-
-    outer_padding_x = max(1, int(width * 0.02))
-    outer_padding_y = max(1, int(height * 0.01))
-    draw.rounded_rectangle(
-        (
-            outer_padding_x,
-            outer_padding_y,
-            width - outer_padding_x,
-            height - max(outer_padding_y, int(height * 0.03)),
-        ),
-        radius=max(18, int(min(width, height) * 0.16)),
-        fill=255,
-    )
-    mask = mask.filter(ImageFilter.GaussianBlur(max(10, int(min(width, height) * 0.035))))
-    draw = ImageDraw.Draw(mask)
-    inner_padding_x = max(1, int(width * 0.08))
-    inner_padding_y = max(1, int(height * 0.05))
-    draw.rounded_rectangle(
-        (
-            inner_padding_x,
-            inner_padding_y,
-            width - inner_padding_x,
-            height - max(inner_padding_y, int(height * 0.08)),
-        ),
-        radius=max(18, int(min(width, height) * 0.12)),
-        fill=255,
-    )
-    return mask
-
-
-def segmented_reference_alpha(image):
-    try:
-        import cv2
-        import numpy as np
-    except Exception as error:
-        raise RuntimeError("Reference cutout segmentation is unavailable.") from error
-
-    rgb = image.convert("RGB")
-    array = np.array(rgb)
-    height, width = array.shape[:2]
-    if width < 80 or height < 120:
-        raise RuntimeError("Reference image is too small for subject cutout.")
-
-    mask = np.zeros((height, width), np.uint8)
-    inset_x = max(8, int(width * 0.045))
-    inset_top = max(6, int(height * 0.018))
-    inset_bottom = max(10, int(height * 0.035))
-    rect = (inset_x, inset_top, width - inset_x * 2, height - inset_top - inset_bottom)
-    bgd_model = np.zeros((1, 65), np.float64)
-    fgd_model = np.zeros((1, 65), np.float64)
-    cv2.grabCut(array, mask, rect, bgd_model, fgd_model, 6, cv2.GC_INIT_WITH_RECT)
-
-    foreground = np.where((mask == cv2.GC_FGD) | (mask == cv2.GC_PR_FGD), 255, 0).astype("uint8")
-    num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(foreground, 8)
-    if num_labels <= 1:
-        raise RuntimeError("No foreground subject found in reference image.")
-
-    center_x = width / 2
-    center_y = height * 0.48
-    best_label = None
-    best_score = -1
-    for label in range(1, num_labels):
-        area = stats[label, cv2.CC_STAT_AREA]
-        if area < width * height * 0.025:
-            continue
-        cx, cy = centroids[label]
-        center_distance = abs(cx - center_x) / width + abs(cy - center_y) / height
-        score = area * (1.15 - min(1.0, center_distance))
-        if score > best_score:
-            best_score = score
-            best_label = label
-
-    if best_label is None:
-        raise RuntimeError("Reference foreground subject was too small.")
-
-    cutout = np.where(labels == best_label, 255, 0).astype("uint8")
-    kernel_size = max(3, int(min(width, height) * 0.012))
-    kernel = np.ones((kernel_size, kernel_size), np.uint8)
-    cutout = cv2.morphologyEx(cutout, cv2.MORPH_CLOSE, kernel, iterations=2)
-    cutout = cv2.morphologyEx(cutout, cv2.MORPH_OPEN, kernel, iterations=1)
-    cutout = cv2.GaussianBlur(cutout, (0, 0), sigmaX=max(1.0, min(width, height) * 0.003))
-
-    alpha = Image.fromarray(cutout, "L")
-    soft_limit = soft_reference_mask(image.size)
-    alpha = ImageChops.multiply(alpha, soft_limit)
-    if not alpha.getbbox():
-        raise RuntimeError("Reference cutout mask is empty.")
-    return alpha
-
-
-def reference_subject_alpha(image):
-    try:
-        return segmented_reference_alpha(image)
-    except Exception:
-        return soft_reference_mask(image.size)
-
-
-def reference_person_layer(reference_path, config):
-    image = ImageOps.exif_transpose(Image.open(reference_path)).convert("RGB")
-    crop = image.crop(reference_photo_crop_box(image))
-    crop_width, crop_height = crop.size
-    title_top = min(band["y"] for band in config["title_bands"])
-
-    if crop_height >= crop_width:
-        target_height = 900
-        target_width = int(crop_width * target_height / crop_height)
-        if target_width > 760:
-            target_width = 760
-            target_height = int(crop_height * target_width / crop_width)
-    else:
-        target_width = 820
-        target_height = int(crop_height * target_width / crop_width)
-        if target_height > 820:
-            target_height = 820
-            target_width = int(crop_width * target_height / crop_height)
-
-    target_width = max(360, min(860, target_width))
-    target_height = max(430, min(940, target_height))
-    resized = crop.resize((target_width, target_height), Image.Resampling.LANCZOS).convert("RGB")
-    layer = resized.convert("RGBA")
-    layer.putalpha(reference_subject_alpha(resized))
-
-    x = int(CANVAS_SIZE[0] / 2 - target_width / 2)
-    y = FOCUS_ZONE["y"] - int(target_height * 0.08)
-    max_bottom = title_top + 130
-    if y + target_height > max_bottom:
-        y = max_bottom - target_height
-    y = max(420, min(y, FOCUS_ZONE["y"] - 8))
-    return layer, (x, y)
-
-
-def compose_reference_person_subject(background_path, reference_path, config):
-    background = adjust_subject(fit_cover(Image.open(background_path), CANVAS_SIZE))
-    person, (x, y) = reference_person_layer(reference_path, config)
-
-    shadow = Image.new("RGBA", person.size, (0, 0, 0, 0))
-    alpha = person.getchannel("A").filter(ImageFilter.GaussianBlur(22))
-    shadow.putalpha(alpha.point(lambda value: int(value * 0.42)))
-
-    canvas = background.copy()
-    canvas.alpha_composite(shadow, (x + 18, y + 28))
-    canvas.alpha_composite(person, (x, y))
-
-    output_path = WORK_DIR / f"subject-reference-composite-{uuid.uuid4().hex}.png"
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    canvas.save(output_path, "PNG", optimize=True)
-    return output_path
-
-
-def generate_subject_image(brief, config, person_reference_path=None):
-    if person_reference_path:
-        background_path = generate_reference_background(brief, config)
-        return compose_reference_person_subject(background_path, person_reference_path, config)
-
+def generate_subject_image(brief, config):
     negative_prompt = combined_negative_prompt(brief, config)
     prompt = standard_subject_image_prompt(brief, config, negative_prompt)
     prompts = [prompt]
@@ -1122,17 +716,6 @@ def render_thumbnail(title, subject_image_path, output_path, config=None):
     return output_path
 
 
-def save_upload(field, destination_dir, preferred_name):
-    if field is None or not getattr(field, "filename", ""):
-        return None
-    destination_dir.mkdir(parents=True, exist_ok=True)
-    suffix = Path(field.filename).suffix or Path(preferred_name).suffix
-    path = destination_dir / f"{Path(preferred_name).stem}-{uuid.uuid4().hex}{suffix}"
-    with open(path, "wb") as handle:
-        shutil.copyfileobj(field.file, handle)
-    return path
-
-
 def field_value(form, name, default=""):
     field = form[name] if name in form else None
     if field is None or getattr(field, "filename", ""):
@@ -1143,16 +726,7 @@ def field_value(form, name, default=""):
     return value
 
 
-def image_data_url(path):
-    image = Image.open(path).convert("RGB")
-    image.thumbnail((1280, 1280), Image.Resampling.LANCZOS)
-    buffer = io.BytesIO()
-    image.save(buffer, "JPEG", quality=90, optimize=True)
-    encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
-    return f"data:image/jpeg;base64,{encoded}"
-
-
-def handle_create(script_text, title, subject_path=None, person_reference_path=None, progress_callback=None, client_slug=DEFAULT_CLIENT):
+def handle_create(script_text, title, subject_path=None, progress_callback=None, client_slug=DEFAULT_CLIENT):
     ensure_dirs()
     config = get_client_config(client_slug)
     title = title.strip()
@@ -1175,22 +749,18 @@ def handle_create(script_text, title, subject_path=None, person_reference_path=N
             script_text,
             title,
             config,
-            has_person_reference=False,
             variant_index=variant_index,
             variant_count=thumbnail_count,
         )
 
         if progress_callback and show_detailed_progress:
             label = f" {variant_index}/{thumbnail_count}" if thumbnail_count > 1 else ""
-            message = f"Visual direction ready. Generating subject image{label}..."
-            if person_reference_path:
-                message = f"Visual direction ready. Generating subject image{label} with the person reference..."
-            progress_callback(34, message)
+            progress_callback(34, f"Visual direction ready. Generating subject image{label}...")
 
         used_ai = bool(openai_key())
         current_subject_path = subject_path
         if not current_subject_path:
-            current_subject_path = generate_subject_image(brief, config, person_reference_path=person_reference_path)
+            current_subject_path = generate_subject_image(brief, config)
 
         if progress_callback and show_detailed_progress:
             label = f" {variant_index}/{thumbnail_count}" if thumbnail_count > 1 else ""
@@ -1218,7 +788,6 @@ def handle_create(script_text, title, subject_path=None, person_reference_path=N
             "design_asset": str(config["design_path"]),
             "title_font": str(config["font_path"]),
             "used_ai": used_ai,
-            "person_reference_used": bool(person_reference_path),
             "option_index": variant_index,
             "option_count": thumbnail_count,
             "option_label": option_label,
@@ -1230,10 +799,7 @@ def handle_create(script_text, title, subject_path=None, person_reference_path=N
         metas = [build_variant(0, show_detailed_progress=True)]
     else:
         if progress_callback:
-            message = "Building two visual directions..."
-            if person_reference_path:
-                message = "Building two visual directions with the person reference..."
-            progress_callback(12, message)
+            progress_callback(12, "Building two visual directions...")
             progress_callback(34, "Generating both subject images at the same time...")
 
         metas_by_index = [None] * thumbnail_count
@@ -1311,7 +877,7 @@ def get_job(job_id):
         return public_job(job) if job else None
 
 
-def run_create_job(job_id, script_text, title, person_reference_path=None, client_slug=DEFAULT_CLIENT):
+def run_create_job(job_id, script_text, title, client_slug=DEFAULT_CLIENT):
     def progress(progress_value, message):
         update_job(job_id, status="running", progress=progress_value, message=message)
 
@@ -1320,7 +886,6 @@ def run_create_job(job_id, script_text, title, person_reference_path=None, clien
         meta = handle_create(
             script_text=script_text,
             title=title,
-            person_reference_path=person_reference_path,
             progress_callback=progress,
             client_slug=client_slug,
         )
@@ -1338,7 +903,6 @@ def run_create_job(job_id, script_text, title, person_reference_path=None, clien
                     "download_url": f"/api/download/{item_thumbnail_name}",
                     "filename": item_thumbnail_name,
                     "used_ai": item["used_ai"],
-                    "person_reference_used": item.get("person_reference_used", False),
                     "option_index": item.get("option_index", 1),
                     "option_count": item.get("option_count", len(source_thumbnails)),
                     "option_label": item.get("option_label", ""),
@@ -1354,7 +918,6 @@ def run_create_job(job_id, script_text, title, person_reference_path=None, clien
             "download_url": primary_result["download_url"],
             "filename": primary_result["filename"],
             "used_ai": meta["used_ai"],
-            "person_reference_used": meta.get("person_reference_used", False),
             "thumbnails": result_thumbnails,
         }
         update_job(
@@ -1377,7 +940,7 @@ def run_create_job(job_id, script_text, title, person_reference_path=None, clien
         )
 
 
-def start_create_job(script_text, title, person_reference_path=None, client_slug=DEFAULT_CLIENT):
+def start_create_job(script_text, title, client_slug=DEFAULT_CLIENT):
     cleanup_jobs()
     job_id = uuid.uuid4().hex
     now = time.time()
@@ -1395,7 +958,7 @@ def start_create_job(script_text, title, person_reference_path=None, client_slug
         }
     thread = threading.Thread(
         target=run_create_job,
-        args=(job_id, script_text, title, person_reference_path, client_slug),
+        args=(job_id, script_text, title, client_slug),
         daemon=True,
     )
     thread.start()
@@ -1512,9 +1075,6 @@ class ThumbnailHandler(BaseHTTPRequestHandler):
                 headers=self.headers,
                 environ={"REQUEST_METHOD": "POST", "CONTENT_TYPE": self.headers.get("Content-Type", "")},
             )
-            request_dir = WORK_DIR / f"upload-{uuid.uuid4().hex}"
-            request_dir.mkdir(parents=True, exist_ok=True)
-
             title = field_value(form, "title").strip()
             script_text = field_value(form, "script").strip()
             client_slug = field_value(form, "client", DEFAULT_CLIENT).strip() or DEFAULT_CLIENT
@@ -1527,16 +1087,9 @@ class ThumbnailHandler(BaseHTTPRequestHandler):
             if not script_text:
                 return self.send_json({"error": "Paste the script first."}, 400)
 
-            person_reference_path = save_upload(
-                form["person_reference"] if "person_reference" in form else None,
-                request_dir,
-                "person-reference.png",
-            )
-
             job_id = start_create_job(
                 script_text=script_text,
                 title=title,
-                person_reference_path=person_reference_path,
                 client_slug=client_slug,
             )
             return self.send_json(
