@@ -22,7 +22,7 @@ from pathlib import Path
 warnings.filterwarnings("ignore", "'cgi' is deprecated", DeprecationWarning)
 import cgi
 
-from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont, ImageOps
+from PIL import Image, ImageChops, ImageDraw, ImageEnhance, ImageFilter, ImageFont, ImageOps
 
 
 APP_DIR = Path(__file__).resolve().parent
@@ -846,6 +846,73 @@ def soft_reference_mask(size):
     return mask
 
 
+def segmented_reference_alpha(image):
+    try:
+        import cv2
+        import numpy as np
+    except Exception as error:
+        raise RuntimeError("Reference cutout segmentation is unavailable.") from error
+
+    rgb = image.convert("RGB")
+    array = np.array(rgb)
+    height, width = array.shape[:2]
+    if width < 80 or height < 120:
+        raise RuntimeError("Reference image is too small for subject cutout.")
+
+    mask = np.zeros((height, width), np.uint8)
+    inset_x = max(8, int(width * 0.045))
+    inset_top = max(6, int(height * 0.018))
+    inset_bottom = max(10, int(height * 0.035))
+    rect = (inset_x, inset_top, width - inset_x * 2, height - inset_top - inset_bottom)
+    bgd_model = np.zeros((1, 65), np.float64)
+    fgd_model = np.zeros((1, 65), np.float64)
+    cv2.grabCut(array, mask, rect, bgd_model, fgd_model, 6, cv2.GC_INIT_WITH_RECT)
+
+    foreground = np.where((mask == cv2.GC_FGD) | (mask == cv2.GC_PR_FGD), 255, 0).astype("uint8")
+    num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(foreground, 8)
+    if num_labels <= 1:
+        raise RuntimeError("No foreground subject found in reference image.")
+
+    center_x = width / 2
+    center_y = height * 0.48
+    best_label = None
+    best_score = -1
+    for label in range(1, num_labels):
+        area = stats[label, cv2.CC_STAT_AREA]
+        if area < width * height * 0.025:
+            continue
+        cx, cy = centroids[label]
+        center_distance = abs(cx - center_x) / width + abs(cy - center_y) / height
+        score = area * (1.15 - min(1.0, center_distance))
+        if score > best_score:
+            best_score = score
+            best_label = label
+
+    if best_label is None:
+        raise RuntimeError("Reference foreground subject was too small.")
+
+    cutout = np.where(labels == best_label, 255, 0).astype("uint8")
+    kernel_size = max(3, int(min(width, height) * 0.012))
+    kernel = np.ones((kernel_size, kernel_size), np.uint8)
+    cutout = cv2.morphologyEx(cutout, cv2.MORPH_CLOSE, kernel, iterations=2)
+    cutout = cv2.morphologyEx(cutout, cv2.MORPH_OPEN, kernel, iterations=1)
+    cutout = cv2.GaussianBlur(cutout, (0, 0), sigmaX=max(1.0, min(width, height) * 0.003))
+
+    alpha = Image.fromarray(cutout, "L")
+    soft_limit = soft_reference_mask(image.size)
+    alpha = ImageChops.multiply(alpha, soft_limit)
+    if not alpha.getbbox():
+        raise RuntimeError("Reference cutout mask is empty.")
+    return alpha
+
+
+def reference_subject_alpha(image):
+    try:
+        return segmented_reference_alpha(image)
+    except Exception:
+        return soft_reference_mask(image.size)
+
+
 def reference_person_layer(reference_path, config):
     image = ImageOps.exif_transpose(Image.open(reference_path)).convert("RGB")
     crop = image.crop(reference_photo_crop_box(image))
@@ -867,8 +934,9 @@ def reference_person_layer(reference_path, config):
 
     target_width = max(360, min(860, target_width))
     target_height = max(430, min(940, target_height))
-    layer = crop.resize((target_width, target_height), Image.Resampling.LANCZOS).convert("RGBA")
-    layer.putalpha(soft_reference_mask(layer.size))
+    resized = crop.resize((target_width, target_height), Image.Resampling.LANCZOS).convert("RGB")
+    layer = resized.convert("RGBA")
+    layer.putalpha(reference_subject_alpha(resized))
 
     x = int(CANVAS_SIZE[0] / 2 - target_width / 2)
     y = FOCUS_ZONE["y"] - int(target_height * 0.08)
