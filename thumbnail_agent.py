@@ -22,7 +22,7 @@ from pathlib import Path
 warnings.filterwarnings("ignore", "'cgi' is deprecated", DeprecationWarning)
 import cgi
 
-from PIL import Image, ImageDraw, ImageEnhance, ImageFont, ImageOps
+from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont, ImageOps
 
 
 APP_DIR = Path(__file__).resolve().parent
@@ -726,48 +726,197 @@ def normalize_reference_image(path):
     return normalized_path
 
 
-def generate_subject_image(brief, config, person_reference_path=None):
-    negative_prompt = combined_negative_prompt(brief, config)
-    prompt = (
-        person_reference_image_prompt(brief, config, negative_prompt)
-        if person_reference_path
-        else standard_subject_image_prompt(brief, config, negative_prompt)
+def reference_background_prompt(brief, config, negative_prompt):
+    x1 = FOCUS_ZONE["x"]
+    y1 = FOCUS_ZONE["y"]
+    x2 = FOCUS_ZONE["x"] + FOCUS_ZONE["w"]
+    y2 = FOCUS_ZONE["y"] + FOCUS_ZONE["h"]
+    return (
+        f"{brief['visual_prompt']}\n\n"
+        "Create the cinematic thumbnail environment only. The app will place the real uploaded person photo afterward. "
+        "Do not include any people, faces, bodies, portraits, silhouettes, characters, text, readable letters, logos, or watermarks. "
+        "Fill the full vertical 9:16 canvas with a real, detailed, cinematic scene from top to bottom. "
+        "Keep the central safe square clear and visually useful for a real person layer: "
+        f"x={x1}..{x2}, y={y1}..{y2}. "
+        f"That safe square is below the {config['prompt_name']} logo area and above the title bars. "
+        "Use depth, atmosphere, props, lighting, and background action that support the script, but leave room for the real person to be the hero. "
+        "The central safe square must be well-lit with cinematic key light and subtle rim light so the real person remains clear. "
+        "Keep the lower title-bar area lower contrast but still visually present. "
+        f"Avoid: {negative_prompt}."
     )
 
-    prompts = [prompt]
-    if person_reference_path:
-        prompts.append(person_reference_image_prompt(brief, config, negative_prompt, retry=True))
 
+def generate_reference_background(brief, config):
+    negative_prompt = combined_negative_prompt(brief, config)
+    prompt = reference_background_prompt(brief, config, negative_prompt)
     last_error = None
-    if person_reference_path:
-        for retry in (False, True):
-            try:
-                image_bytes = openai_images_edit(
-                    person_reference_edit_prompt(brief, config, negative_prompt, retry=retry),
-                    person_reference_path,
-                )
-                break
-            except Exception as error:
-                last_error = error
-        else:
-            image_bytes = None
-        if image_bytes:
-            image_path = WORK_DIR / f"subject-{uuid.uuid4().hex}.png"
-            image_path.write_bytes(image_bytes)
-            return image_path
+    try:
+        image_bytes = openai_images_generate(prompt)
+    except Exception as error:
+        last_error = error
+    else:
+        image_path = WORK_DIR / f"subject-background-{uuid.uuid4().hex}.png"
+        image_path.write_bytes(image_bytes)
+        return image_path
 
-    if not person_reference_path:
-        try:
-            image_bytes = openai_images_generate(prompt)
-            image_path = WORK_DIR / f"subject-{uuid.uuid4().hex}.png"
-            image_path.write_bytes(image_bytes)
-            return image_path
-        except Exception as error:
-            last_error = error
+    try:
+        payload = image_generation_payload(prompt)
+        image_bytes = base64.b64decode(
+            extract_image_base64(openai_responses_create(payload, timeout=openai_image_timeout()))
+        )
+    except Exception as error:
+        raise error from last_error
+
+    image_path = WORK_DIR / f"subject-background-{uuid.uuid4().hex}.png"
+    image_path.write_bytes(image_bytes)
+    return image_path
+
+
+def reference_photo_crop_box(image):
+    width, height = image.size
+    if height >= width:
+        return (
+            int(width * 0.14),
+            int(height * 0.07),
+            int(width * 0.86),
+            int(height * 0.88),
+        )
+    return (
+        int(width * 0.03),
+        int(height * 0.02),
+        int(width * 0.97),
+        int(height * 0.96),
+    )
+
+
+def soft_reference_mask(size):
+    width, height = size
+    mask = Image.new("L", size, 0)
+    draw = ImageDraw.Draw(mask)
+    if height >= width:
+        feather = max(16, int(min(width, height) * 0.055))
+        draw.ellipse(
+            (
+                int(width * 0.01),
+                -int(height * 0.04),
+                int(width * 0.99),
+                int(height * 1.03),
+            ),
+            fill=255,
+        )
+        mask = mask.filter(ImageFilter.GaussianBlur(feather))
+        draw = ImageDraw.Draw(mask)
+        draw.ellipse(
+            (
+                int(width * 0.11),
+                int(height * 0.03),
+                int(width * 0.89),
+                int(height * 0.88),
+            ),
+            fill=255,
+        )
+        return mask
+
+    outer_padding_x = max(1, int(width * 0.02))
+    outer_padding_y = max(1, int(height * 0.01))
+    draw.rounded_rectangle(
+        (
+            outer_padding_x,
+            outer_padding_y,
+            width - outer_padding_x,
+            height - max(outer_padding_y, int(height * 0.03)),
+        ),
+        radius=max(18, int(min(width, height) * 0.16)),
+        fill=255,
+    )
+    mask = mask.filter(ImageFilter.GaussianBlur(max(10, int(min(width, height) * 0.035))))
+    draw = ImageDraw.Draw(mask)
+    inner_padding_x = max(1, int(width * 0.08))
+    inner_padding_y = max(1, int(height * 0.05))
+    draw.rounded_rectangle(
+        (
+            inner_padding_x,
+            inner_padding_y,
+            width - inner_padding_x,
+            height - max(inner_padding_y, int(height * 0.08)),
+        ),
+        radius=max(18, int(min(width, height) * 0.12)),
+        fill=255,
+    )
+    return mask
+
+
+def reference_person_layer(reference_path, config):
+    image = ImageOps.exif_transpose(Image.open(reference_path)).convert("RGB")
+    crop = image.crop(reference_photo_crop_box(image))
+    crop_width, crop_height = crop.size
+    title_top = min(band["y"] for band in config["title_bands"])
+
+    if crop_height >= crop_width:
+        target_height = 900
+        target_width = int(crop_width * target_height / crop_height)
+        if target_width > 760:
+            target_width = 760
+            target_height = int(crop_height * target_width / crop_width)
+    else:
+        target_width = 820
+        target_height = int(crop_height * target_width / crop_width)
+        if target_height > 820:
+            target_height = 820
+            target_width = int(crop_width * target_height / crop_height)
+
+    target_width = max(360, min(860, target_width))
+    target_height = max(430, min(940, target_height))
+    layer = crop.resize((target_width, target_height), Image.Resampling.LANCZOS).convert("RGBA")
+    layer.putalpha(soft_reference_mask(layer.size))
+
+    x = int(CANVAS_SIZE[0] / 2 - target_width / 2)
+    y = FOCUS_ZONE["y"] - int(target_height * 0.08)
+    max_bottom = title_top + 130
+    if y + target_height > max_bottom:
+        y = max_bottom - target_height
+    y = max(420, min(y, FOCUS_ZONE["y"] - 8))
+    return layer, (x, y)
+
+
+def compose_reference_person_subject(background_path, reference_path, config):
+    background = adjust_subject(fit_cover(Image.open(background_path), CANVAS_SIZE))
+    person, (x, y) = reference_person_layer(reference_path, config)
+
+    shadow = Image.new("RGBA", person.size, (0, 0, 0, 0))
+    alpha = person.getchannel("A").filter(ImageFilter.GaussianBlur(22))
+    shadow.putalpha(alpha.point(lambda value: int(value * 0.42)))
+
+    canvas = background.copy()
+    canvas.alpha_composite(shadow, (x + 18, y + 28))
+    canvas.alpha_composite(person, (x, y))
+
+    output_path = WORK_DIR / f"subject-reference-composite-{uuid.uuid4().hex}.png"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    canvas.save(output_path, "PNG", optimize=True)
+    return output_path
+
+
+def generate_subject_image(brief, config, person_reference_path=None):
+    if person_reference_path:
+        background_path = generate_reference_background(brief, config)
+        return compose_reference_person_subject(background_path, person_reference_path, config)
+
+    negative_prompt = combined_negative_prompt(brief, config)
+    prompt = standard_subject_image_prompt(brief, config, negative_prompt)
+    prompts = [prompt]
+    last_error = None
+    try:
+        image_bytes = openai_images_generate(prompt)
+        image_path = WORK_DIR / f"subject-{uuid.uuid4().hex}.png"
+        image_path.write_bytes(image_bytes)
+        return image_path
+    except Exception as error:
+        last_error = error
 
     for image_prompt in prompts:
         try:
-            payload = image_generation_payload(image_prompt, person_reference_path=person_reference_path)
+            payload = image_generation_payload(image_prompt)
             image_bytes = base64.b64decode(
                 extract_image_base64(openai_responses_create(payload, timeout=openai_image_timeout()))
             )
@@ -958,7 +1107,7 @@ def handle_create(script_text, title, subject_path=None, person_reference_path=N
             script_text,
             title,
             config,
-            has_person_reference=bool(person_reference_path),
+            has_person_reference=False,
             variant_index=variant_index,
             variant_count=thumbnail_count,
         )
