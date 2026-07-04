@@ -233,6 +233,22 @@ def safe_zone_negative_prompt(config=None):
     )
 
 
+def person_reference_prompt(config=None):
+    config = config or get_client_config(DEFAULT_CLIENT)
+    x1 = FOCUS_ZONE["x"]
+    y1 = FOCUS_ZONE["y"]
+    x2 = FOCUS_ZONE["x"] + FOCUS_ZONE["w"]
+    y2 = FOCUS_ZONE["y"] + FOCUS_ZONE["h"]
+    return (
+        "A person reference image is attached. Use the person in that image as the main human subject for the new thumbnail scene. "
+        "Use the reference as identity guidance only: create a fresh cinematic image from the script, with a new background, new lighting, and a natural thumbnail composition. "
+        "Do not paste the uploaded photo into the thumbnail, do not keep its original background, do not make a collage or rectangular photo insert, and do not turn the person into an illustration or drawing. "
+        "The person may have a new pose, wardrobe, scale, camera angle, and environment if that helps the thumbnail. "
+        f"Safe-zone placement still controls everything: the person's face, head, eyes, shoulders, upper body, and any important object must stay inside x={x1}..{x2}, y={y1}..{y2}, "
+        f"below the {config['prompt_name']} logo area and above the title bars."
+    )
+
+
 def ensure_dirs():
     for path in [ASSETS_DIR, STATE_DIR, GENERATED_DIR, WORK_DIR]:
         path.mkdir(parents=True, exist_ok=True)
@@ -425,6 +441,11 @@ def user_friendly_error(error):
             "OpenAI took too long to return the image. "
             "Please try again; if it keeps happening, use a shorter script or try one thumbnail run again later."
         )
+    if "recognizable identity" in lowered and "public figure" in lowered:
+        return (
+            "OpenAI cannot recreate a recognizable public figure from an uploaded photo. "
+            "Use the script without a reference image, or upload a photo of a non-public person you have permission to use."
+        )
     return message
 
 
@@ -450,7 +471,16 @@ def visual_brief_schema():
     }
 
 
-def create_visual_brief(script_text, title, config, variant_index=1, variant_count=1):
+def create_visual_brief(script_text, title, config, has_person_reference=False, variant_index=1, variant_count=1):
+    reference_note = ""
+    reference_public_figure_note = (
+        "If a person reference image is supplied, build the scene around the person from the attached reference image instead of inventing a different person. "
+        if has_person_reference
+        else (
+            "When the script mentions a public figure, do not request an exact recognizable likeness; "
+            "use a fictional or generic person in the same role and story context instead. "
+        )
+    )
     variant_note = ""
     if variant_count > 1:
         variant_note = (
@@ -458,10 +488,16 @@ def create_visual_brief(script_text, title, config, variant_index=1, variant_cou
             "Make this option visually distinct in composition, setting, camera angle, color mood, and subject action from the other option, "
             "while still following the same title, script, template, and subject-placement rules. "
         )
+    if has_person_reference:
+        reference_note = (
+            "A person reference image will be attached during image generation. "
+            "Describe the main human as the person from the attached reference image, placed naturally into the new scene. "
+        )
     if not openai_key():
         return {
             "visual_prompt": (
                 "Create a vertical 9:16 full-frame editorial thumbnail image based on the script. "
+                f"{reference_note}"
                 f"{variant_note}"
                 f"No text, no captions, no logos, no black empty poster space. {focus_zone_prompt(config)}"
             ),
@@ -487,8 +523,7 @@ def create_visual_brief(script_text, title, config, variant_index=1, variant_cou
                     f"For any human, the entire face/head/eyes must stay below y={FOCUS_ZONE['y']}; never above or overlapping the logo. "
                     "Avoid tight closeups; zoom out and lower the hero subject when needed. "
                     "Central-subject lighting is strict: any main person, vehicle, robot, product, or key object must be well-lit, cinematic, and clearly readable. "
-                    "When the script mentions a public figure, do not request an exact recognizable likeness; "
-                    "use a fictional or generic person in the same role and story context instead. "
+                    f"{reference_public_figure_note}"
                     f"Add safe-zone failures to the negative prompt, including: {safe_zone_negative_prompt(config)}. "
                     "Return only JSON matching the schema. Never include text, captions, or logos in the image prompt."
                 ),
@@ -503,9 +538,10 @@ def create_visual_brief(script_text, title, config, variant_index=1, variant_cou
                             "Create only the subject/background image prompt for this script. "
                             f"The final image must be full-frame 9:16 and fill the whole thumbnail behind a {config['template_context']}. "
                             "Avoid black voids, blank poster space, title-card layouts, or large empty areas. "
+                            f"{reference_note}"
                             f"{variant_note}"
                             f"{focus_zone_prompt(config)} "
-                            "If the script names a famous/public person, describe a fictional or generic person in the same role, not the exact public figure likeness. "
+                            f"{reference_public_figure_note}"
                             "Do not propose a close-up face crop above the logo; the hero face, object, vehicle, robot, product, or key action must be inside the safe square. "
                             "Keep the lower title area visually calmer but still image-filled.\n\n"
                             f"SCRIPT:\n{script_text[:14000]}"
@@ -554,8 +590,17 @@ def standard_subject_image_prompt(brief, config, negative_prompt):
     )
 
 
-def image_generation_payload(prompt):
+def image_data_url(path):
+    path = Path(path)
+    mime_type = mimetypes.guess_type(str(path))[0] or "image/jpeg"
+    encoded = base64.b64encode(path.read_bytes()).decode("ascii")
+    return f"data:{mime_type};base64,{encoded}"
+
+
+def image_generation_payload(prompt, person_reference_path=None):
     content = [{"type": "input_text", "text": prompt}]
+    if person_reference_path:
+        content.append({"type": "input_image", "image_url": image_data_url(person_reference_path)})
     return {
         "model": openai_model(),
         "input": [{"role": "user", "content": content}],
@@ -563,11 +608,23 @@ def image_generation_payload(prompt):
     }
 
 
-def generate_subject_image(brief, config):
+def generate_subject_image(brief, config, person_reference_path=None):
     negative_prompt = combined_negative_prompt(brief, config)
     prompt = standard_subject_image_prompt(brief, config, negative_prompt)
+    if person_reference_path:
+        prompt = f"{prompt}\n\n{person_reference_prompt(config)}"
     prompts = [prompt]
     last_error = None
+
+    if person_reference_path:
+        payload = image_generation_payload(prompt, person_reference_path)
+        image_bytes = base64.b64decode(
+            extract_image_base64(openai_responses_create(payload, timeout=openai_image_timeout()))
+        )
+        image_path = WORK_DIR / f"subject-{uuid.uuid4().hex}.png"
+        image_path.write_bytes(image_bytes)
+        return image_path
+
     try:
         image_bytes = openai_images_generate(prompt)
         image_path = WORK_DIR / f"subject-{uuid.uuid4().hex}.png"
@@ -726,7 +783,61 @@ def field_value(form, name, default=""):
     return value
 
 
-def handle_create(script_text, title, subject_path=None, progress_callback=None, client_slug=DEFAULT_CLIENT):
+def normalize_reference_image(path, delete_source=False):
+    path = Path(path)
+    try:
+        image = Image.open(path)
+        image = ImageOps.exif_transpose(image)
+    except Exception as error:
+        raise RuntimeError("Could not read the uploaded reference image. Try a clear JPG or PNG photo.") from error
+
+    image.thumbnail((1600, 1600), Image.Resampling.LANCZOS)
+    if image.mode in ("RGBA", "LA"):
+        background = Image.new("RGB", image.size, (255, 255, 255))
+        alpha = image.getchannel("A") if image.mode == "RGBA" else image.getchannel("A")
+        background.paste(image.convert("RGBA"), mask=alpha)
+        image = background
+    else:
+        image = image.convert("RGB")
+
+    output_path = WORK_DIR / f"person-reference-{uuid.uuid4().hex}.jpg"
+    image.save(output_path, "JPEG", quality=92, optimize=True)
+    if delete_source:
+        try:
+            path.unlink(missing_ok=True)
+        except OSError:
+            pass
+    return output_path
+
+
+def save_upload(form, name):
+    if name not in form:
+        return None
+    field = form[name]
+    if isinstance(field, list):
+        field = field[0] if field else None
+    if field is None or not getattr(field, "filename", ""):
+        return None
+    data = field.file.read()
+    if not data:
+        return None
+    if len(data) > 20 * 1024 * 1024:
+        raise RuntimeError("Reference image is too large. Upload an image under 20 MB.")
+    upload_name = safe_filename(Path(field.filename).stem, "reference")
+    suffix = Path(field.filename).suffix.lower()[:8] or ".img"
+    raw_path = WORK_DIR / f"upload-{uuid.uuid4().hex}-{upload_name}{suffix}"
+    raw_path.write_bytes(data)
+    return normalize_reference_image(raw_path, delete_source=True)
+
+
+def handle_create(
+    script_text,
+    title,
+    subject_path=None,
+    progress_callback=None,
+    client_slug=DEFAULT_CLIENT,
+    person_reference_path=None,
+):
     ensure_dirs()
     config = get_client_config(client_slug)
     title = title.strip()
@@ -749,6 +860,7 @@ def handle_create(script_text, title, subject_path=None, progress_callback=None,
             script_text,
             title,
             config,
+            has_person_reference=bool(person_reference_path),
             variant_index=variant_index,
             variant_count=thumbnail_count,
         )
@@ -760,7 +872,7 @@ def handle_create(script_text, title, subject_path=None, progress_callback=None,
         used_ai = bool(openai_key())
         current_subject_path = subject_path
         if not current_subject_path:
-            current_subject_path = generate_subject_image(brief, config)
+            current_subject_path = generate_subject_image(brief, config, person_reference_path)
 
         if progress_callback and show_detailed_progress:
             label = f" {variant_index}/{thumbnail_count}" if thumbnail_count > 1 else ""
@@ -788,6 +900,7 @@ def handle_create(script_text, title, subject_path=None, progress_callback=None,
             "design_asset": str(config["design_path"]),
             "title_font": str(config["font_path"]),
             "used_ai": used_ai,
+            "person_reference_used": bool(person_reference_path),
             "option_index": variant_index,
             "option_count": thumbnail_count,
             "option_label": option_label,
@@ -877,7 +990,7 @@ def get_job(job_id):
         return public_job(job) if job else None
 
 
-def run_create_job(job_id, script_text, title, client_slug=DEFAULT_CLIENT):
+def run_create_job(job_id, script_text, title, client_slug=DEFAULT_CLIENT, person_reference_path=None):
     def progress(progress_value, message):
         update_job(job_id, status="running", progress=progress_value, message=message)
 
@@ -888,6 +1001,7 @@ def run_create_job(job_id, script_text, title, client_slug=DEFAULT_CLIENT):
             title=title,
             progress_callback=progress,
             client_slug=client_slug,
+            person_reference_path=person_reference_path,
         )
         source_thumbnails = meta.get("thumbnails") or [meta]
         result_thumbnails = []
@@ -903,6 +1017,7 @@ def run_create_job(job_id, script_text, title, client_slug=DEFAULT_CLIENT):
                     "download_url": f"/api/download/{item_thumbnail_name}",
                     "filename": item_thumbnail_name,
                     "used_ai": item["used_ai"],
+                    "person_reference_used": item.get("person_reference_used", False),
                     "option_index": item.get("option_index", 1),
                     "option_count": item.get("option_count", len(source_thumbnails)),
                     "option_label": item.get("option_label", ""),
@@ -918,6 +1033,7 @@ def run_create_job(job_id, script_text, title, client_slug=DEFAULT_CLIENT):
             "download_url": primary_result["download_url"],
             "filename": primary_result["filename"],
             "used_ai": meta["used_ai"],
+            "person_reference_used": meta.get("person_reference_used", False),
             "thumbnails": result_thumbnails,
         }
         update_job(
@@ -940,7 +1056,7 @@ def run_create_job(job_id, script_text, title, client_slug=DEFAULT_CLIENT):
         )
 
 
-def start_create_job(script_text, title, client_slug=DEFAULT_CLIENT):
+def start_create_job(script_text, title, client_slug=DEFAULT_CLIENT, person_reference_path=None):
     cleanup_jobs()
     job_id = uuid.uuid4().hex
     now = time.time()
@@ -958,7 +1074,7 @@ def start_create_job(script_text, title, client_slug=DEFAULT_CLIENT):
         }
     thread = threading.Thread(
         target=run_create_job,
-        args=(job_id, script_text, title, client_slug),
+        args=(job_id, script_text, title, client_slug, person_reference_path),
         daemon=True,
     )
     thread.start()
@@ -1087,10 +1203,13 @@ class ThumbnailHandler(BaseHTTPRequestHandler):
             if not script_text:
                 return self.send_json({"error": "Paste the script first."}, 400)
 
+            ensure_dirs()
+            person_reference_path = save_upload(form, "person_reference")
             job_id = start_create_job(
                 script_text=script_text,
                 title=title,
                 client_slug=client_slug,
+                person_reference_path=person_reference_path,
             )
             return self.send_json(
                 {
@@ -1117,6 +1236,7 @@ def command_render(args):
         title=args.title,
         subject_path=Path(args.subject_image) if args.subject_image else None,
         client_slug=args.client,
+        person_reference_path=normalize_reference_image(Path(args.person_reference)) if args.person_reference else None,
     )
     print(json.dumps(meta, indent=2))
 
@@ -1133,6 +1253,7 @@ def main(argv=None):
     render_parser.add_argument("--script", required=True)
     render_parser.add_argument("--title", required=True)
     render_parser.add_argument("--subject-image")
+    render_parser.add_argument("--person-reference")
     render_parser.add_argument("--client", default=DEFAULT_CLIENT, choices=sorted(CLIENTS))
 
     args = parser.parse_args(argv)

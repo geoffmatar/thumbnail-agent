@@ -690,7 +690,7 @@ body.siyata-mode #progressLabel {
 
 .control-panel {
   display: grid;
-  grid-template-rows: var(--form-top-height) var(--form-work-height);
+  grid-template-rows: var(--form-top-height) minmax(360px, calc(var(--form-work-height) - 120px)) 104px;
   gap: 16px;
   padding: 18px;
 }
@@ -831,8 +831,67 @@ textarea {
 
 .script-card {
   grid-template-rows: auto minmax(0, 1fr);
-  min-height: var(--form-work-height);
-  height: var(--form-work-height);
+  min-height: 360px;
+  height: auto;
+}
+
+.reference-card {
+  min-height: 104px;
+  height: 104px;
+  gap: 7px;
+  cursor: pointer;
+}
+
+.reference-card input {
+  display: none;
+}
+
+.reference-button {
+  display: grid;
+  place-items: center;
+  min-height: 34px;
+  padding: 0 14px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.42);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.1;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.alliance-mode .reference-button {
+  color: var(--text);
+  background: rgba(255, 250, 244, 0.72);
+  border-color: rgba(154, 83, 43, 0.3);
+}
+
+body.alliance-black-mode .reference-button {
+  color: var(--text);
+  background: rgba(12, 9, 8, 0.62);
+  border-color: rgba(229, 158, 99, 0.3);
+}
+
+body.siyata-mode .reference-button {
+  color: var(--text);
+  background: rgba(0, 0, 0, 0.54);
+  border-color: rgba(80, 162, 184, 0.34);
+}
+
+body.alliance-lgbtq-mode .reference-button {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.7);
+  border-color: rgba(174, 91, 182, 0.26);
+}
+
+.reference-card:hover .reference-button,
+.reference-card:focus-within .reference-button {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 .title-card input:focus,
@@ -1547,9 +1606,14 @@ body.alliance-lgbtq-mode .secondary-btn {
   .progress-panel,
   .create-panel,
   .script-card,
+  .reference-card,
   .preview-stage {
     height: auto;
     min-height: 0;
+  }
+
+  .reference-card {
+    min-height: 104px;
   }
 
   textarea {
