@@ -690,7 +690,7 @@ body.siyata-mode #progressLabel {
 
 .control-panel {
   display: grid;
-  grid-template-rows: var(--form-top-height) minmax(300px, calc(var(--form-work-height) - 238px)) 112px 104px;
+  grid-template-rows: var(--form-top-height) minmax(300px, calc(var(--form-work-height) - 222px)) 96px 104px;
   gap: 16px;
   padding: 18px;
 }
@@ -836,9 +836,9 @@ textarea {
 }
 
 .prompt-card {
-  grid-template-rows: auto minmax(0, 1fr) auto;
-  min-height: 112px;
-  height: 112px;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 96px;
+  height: 96px;
 }
 
 .prompt-card textarea {
