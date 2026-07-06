@@ -821,7 +821,7 @@ textarea {
   justify-self: stretch;
   width: 100%;
   max-width: none;
-  resize: vertical;
+  resize: none;
   min-height: 0;
   height: 100%;
   aspect-ratio: auto;
@@ -846,7 +846,7 @@ textarea {
   height: 46px;
   padding: 10px 13px;
   line-height: 1.35;
-  resize: vertical;
+  resize: none;
 }
 
 .reference-card {
@@ -1636,7 +1636,7 @@ body.alliance-lgbtq-mode .secondary-btn {
     width: 100%;
     max-width: none;
     aspect-ratio: auto;
-    resize: vertical;
+    resize: none;
     height: auto;
     min-height: 300px;
   }
