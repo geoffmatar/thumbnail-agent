@@ -471,7 +471,15 @@ def visual_brief_schema():
     }
 
 
-def create_visual_brief(script_text, title, config, has_person_reference=False, variant_index=1, variant_count=1):
+def create_visual_brief(
+    script_text,
+    title,
+    config,
+    has_person_reference=False,
+    variant_index=1,
+    variant_count=1,
+    extra_prompt="",
+):
     reference_note = ""
     reference_public_figure_note = (
         "If a person reference image is supplied, build the scene around the person from the attached reference image instead of inventing a different person. "
@@ -493,12 +501,21 @@ def create_visual_brief(script_text, title, config, has_person_reference=False, 
             "A person reference image will be attached during image generation. "
             "Describe the main human as the person from the attached reference image, placed naturally into the new scene. "
         )
+    extra_prompt = (extra_prompt or "").strip()
+    extra_prompt_note = ""
+    if extra_prompt:
+        extra_prompt_note = (
+            "Extra user visual direction is provided. Use it as additional guidance on top of the script, "
+            "not as a replacement for the script. Follow it unless it conflicts with the fixed template, no-text/no-logo rule, "
+            "safe-zone composition, or image safety rules. "
+        )
     if not openai_key():
         return {
             "visual_prompt": (
                 "Create a vertical 9:16 full-frame editorial thumbnail image based on the script. "
                 f"{reference_note}"
                 f"{variant_note}"
+                f"{extra_prompt_note}"
                 f"No text, no captions, no logos, no black empty poster space. {focus_zone_prompt(config)}"
             ),
             "negative_prompt": (
@@ -524,6 +541,7 @@ def create_visual_brief(script_text, title, config, has_person_reference=False, 
                     "Avoid tight closeups; zoom out and lower the hero subject when needed. "
                     "Central-subject lighting is strict: any main person, vehicle, robot, product, or key object must be well-lit, cinematic, and clearly readable. "
                     f"{reference_public_figure_note}"
+                    f"{extra_prompt_note}"
                     f"Add safe-zone failures to the negative prompt, including: {safe_zone_negative_prompt(config)}. "
                     "Return only JSON matching the schema. Never include text, captions, or logos in the image prompt."
                 ),
@@ -542,9 +560,15 @@ def create_visual_brief(script_text, title, config, has_person_reference=False, 
                             f"{variant_note}"
                             f"{focus_zone_prompt(config)} "
                             f"{reference_public_figure_note}"
+                            f"{extra_prompt_note}"
                             "Do not propose a close-up face crop above the logo; the hero face, object, vehicle, robot, product, or key action must be inside the safe square. "
                             "Keep the lower title area visually calmer but still image-filled.\n\n"
                             f"SCRIPT:\n{script_text[:14000]}"
+                            + (
+                                f"\n\nEXTRA USER VISUAL DIRECTION:\n{extra_prompt[:3000]}"
+                                if extra_prompt
+                                else ""
+                            )
                         ),
                     }
                 ],
@@ -837,6 +861,7 @@ def handle_create(
     progress_callback=None,
     client_slug=DEFAULT_CLIENT,
     person_reference_path=None,
+    extra_prompt="",
 ):
     ensure_dirs()
     config = get_client_config(client_slug)
@@ -845,6 +870,7 @@ def handle_create(
         raise RuntimeError("Add the thumbnail title first.")
     if not script_text.strip():
         raise RuntimeError("Paste the script first.")
+    extra_prompt = (extra_prompt or "").strip()
 
     thumbnail_count = 2 if config["slug"] in TWO_THUMBNAIL_CLIENTS else 1
     timestamp = time.strftime("%Y%m%d-%H%M%S")
@@ -863,6 +889,7 @@ def handle_create(
             has_person_reference=bool(person_reference_path),
             variant_index=variant_index,
             variant_count=thumbnail_count,
+            extra_prompt=extra_prompt,
         )
 
         if progress_callback and show_detailed_progress:
@@ -901,6 +928,7 @@ def handle_create(
             "title_font": str(config["font_path"]),
             "used_ai": used_ai,
             "person_reference_used": bool(person_reference_path),
+            "extra_prompt_used": bool(extra_prompt),
             "option_index": variant_index,
             "option_count": thumbnail_count,
             "option_label": option_label,
@@ -990,7 +1018,7 @@ def get_job(job_id):
         return public_job(job) if job else None
 
 
-def run_create_job(job_id, script_text, title, client_slug=DEFAULT_CLIENT, person_reference_path=None):
+def run_create_job(job_id, script_text, title, client_slug=DEFAULT_CLIENT, person_reference_path=None, extra_prompt=""):
     def progress(progress_value, message):
         update_job(job_id, status="running", progress=progress_value, message=message)
 
@@ -1002,6 +1030,7 @@ def run_create_job(job_id, script_text, title, client_slug=DEFAULT_CLIENT, perso
             progress_callback=progress,
             client_slug=client_slug,
             person_reference_path=person_reference_path,
+            extra_prompt=extra_prompt,
         )
         source_thumbnails = meta.get("thumbnails") or [meta]
         result_thumbnails = []
@@ -1018,6 +1047,7 @@ def run_create_job(job_id, script_text, title, client_slug=DEFAULT_CLIENT, perso
                     "filename": item_thumbnail_name,
                     "used_ai": item["used_ai"],
                     "person_reference_used": item.get("person_reference_used", False),
+                    "extra_prompt_used": item.get("extra_prompt_used", False),
                     "option_index": item.get("option_index", 1),
                     "option_count": item.get("option_count", len(source_thumbnails)),
                     "option_label": item.get("option_label", ""),
@@ -1034,6 +1064,7 @@ def run_create_job(job_id, script_text, title, client_slug=DEFAULT_CLIENT, perso
             "filename": primary_result["filename"],
             "used_ai": meta["used_ai"],
             "person_reference_used": meta.get("person_reference_used", False),
+            "extra_prompt_used": meta.get("extra_prompt_used", False),
             "thumbnails": result_thumbnails,
         }
         update_job(
@@ -1056,7 +1087,7 @@ def run_create_job(job_id, script_text, title, client_slug=DEFAULT_CLIENT, perso
         )
 
 
-def start_create_job(script_text, title, client_slug=DEFAULT_CLIENT, person_reference_path=None):
+def start_create_job(script_text, title, client_slug=DEFAULT_CLIENT, person_reference_path=None, extra_prompt=""):
     cleanup_jobs()
     job_id = uuid.uuid4().hex
     now = time.time()
@@ -1074,7 +1105,7 @@ def start_create_job(script_text, title, client_slug=DEFAULT_CLIENT, person_refe
         }
     thread = threading.Thread(
         target=run_create_job,
-        args=(job_id, script_text, title, client_slug, person_reference_path),
+        args=(job_id, script_text, title, client_slug, person_reference_path, extra_prompt),
         daemon=True,
     )
     thread.start()
@@ -1193,6 +1224,7 @@ class ThumbnailHandler(BaseHTTPRequestHandler):
             )
             title = field_value(form, "title").strip()
             script_text = field_value(form, "script").strip()
+            extra_prompt = field_value(form, "extra_prompt").strip()
             client_slug = field_value(form, "client", DEFAULT_CLIENT).strip() or DEFAULT_CLIENT
             try:
                 get_client_config(client_slug)
@@ -1210,6 +1242,7 @@ class ThumbnailHandler(BaseHTTPRequestHandler):
                 title=title,
                 client_slug=client_slug,
                 person_reference_path=person_reference_path,
+                extra_prompt=extra_prompt,
             )
             return self.send_json(
                 {
@@ -1237,6 +1270,7 @@ def command_render(args):
         subject_path=Path(args.subject_image) if args.subject_image else None,
         client_slug=args.client,
         person_reference_path=normalize_reference_image(Path(args.person_reference)) if args.person_reference else None,
+        extra_prompt=args.extra_prompt or "",
     )
     print(json.dumps(meta, indent=2))
 
@@ -1254,6 +1288,7 @@ def main(argv=None):
     render_parser.add_argument("--title", required=True)
     render_parser.add_argument("--subject-image")
     render_parser.add_argument("--person-reference")
+    render_parser.add_argument("--extra-prompt", default="")
     render_parser.add_argument("--client", default=DEFAULT_CLIENT, choices=sorted(CLIENTS))
 
     args = parser.parse_args(argv)

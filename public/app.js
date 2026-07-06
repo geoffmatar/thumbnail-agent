@@ -12,6 +12,7 @@ const studioLogo = document.querySelector("#studioLogo");
 const studioTitle = document.querySelector("#studioTitle");
 const titleInput = document.querySelector("#titleInput");
 const scriptText = document.querySelector("#scriptText");
+const extraPrompt = document.querySelector("#extraPrompt");
 const personReference = document.querySelector("#personReference");
 const referenceFileName = document.querySelector("#referenceFileName");
 const resultsList = document.querySelector("#resultsList");
@@ -77,6 +78,7 @@ const clientStates = Object.fromEntries(
     {
       title: "",
       script: "",
+      extraPrompt: "",
       personReferenceFile: null,
       progress: null,
       progressStartedAt: 0,
@@ -150,6 +152,7 @@ function syncCurrentFormState() {
   if (!state || zoomexView.hidden) return;
   state.title = titleInput.value;
   state.script = scriptText.value;
+  state.extraPrompt = extraPrompt.value;
 }
 
 function renderStatus(clientSlug = currentClient) {
@@ -341,6 +344,7 @@ function hydrateClientState(clientSlug) {
   const state = getClientState(clientSlug);
   titleInput.value = state.title;
   scriptText.value = state.script;
+  extraPrompt.value = state.extraPrompt;
   personReference.value = "";
   renderReferenceState(clientSlug);
   renderResultState(clientSlug);
@@ -466,6 +470,10 @@ async function createThumbnail() {
   form.append("client", jobClient);
   form.append("title", title);
   form.append("script", script);
+  const extraPromptValue = extraPrompt.value.trim();
+  if (extraPromptValue) {
+    form.append("extra_prompt", extraPromptValue);
+  }
   if (state.personReferenceFile) {
     form.append("person_reference", state.personReferenceFile);
   }
@@ -521,6 +529,9 @@ titleInput.addEventListener("input", () => {
 });
 scriptText.addEventListener("input", () => {
   getClientState().script = scriptText.value;
+});
+extraPrompt.addEventListener("input", () => {
+  getClientState().extraPrompt = extraPrompt.value;
 });
 personReference.addEventListener("change", updateReferenceFileName);
 resultsList.addEventListener("click", downloadThumbnail);

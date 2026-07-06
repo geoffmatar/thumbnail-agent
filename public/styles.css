@@ -690,7 +690,7 @@ body.siyata-mode #progressLabel {
 
 .control-panel {
   display: grid;
-  grid-template-rows: var(--form-top-height) minmax(360px, calc(var(--form-work-height) - 120px)) 104px;
+  grid-template-rows: var(--form-top-height) minmax(300px, calc(var(--form-work-height) - 238px)) 112px 104px;
   gap: 16px;
   padding: 18px;
 }
@@ -831,8 +831,22 @@ textarea {
 
 .script-card {
   grid-template-rows: auto minmax(0, 1fr);
-  min-height: 360px;
+  min-height: 300px;
   height: auto;
+}
+
+.prompt-card {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-height: 112px;
+  height: 112px;
+}
+
+.prompt-card textarea {
+  min-height: 46px;
+  height: 46px;
+  padding: 10px 13px;
+  line-height: 1.35;
+  resize: vertical;
 }
 
 .reference-card {
@@ -1606,6 +1620,7 @@ body.alliance-lgbtq-mode .secondary-btn {
   .progress-panel,
   .create-panel,
   .script-card,
+  .prompt-card,
   .reference-card,
   .preview-stage {
     height: auto;
@@ -1624,6 +1639,11 @@ body.alliance-lgbtq-mode .secondary-btn {
     resize: vertical;
     height: auto;
     min-height: 300px;
+  }
+
+  .prompt-card textarea {
+    min-height: 96px;
+    height: auto;
   }
 
   .results-list,
