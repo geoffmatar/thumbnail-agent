@@ -171,7 +171,7 @@ CLIENTS = {
     },
 }
 DEFAULT_CLIENT = "zoomex"
-TWO_THUMBNAIL_CLIENTS = {"zoomex", "alliance-latin", "alliance-black", "alliance-lgbtq", "siyata"}
+TWO_THUMBNAIL_CLIENTS = {"zoomex", "siyata"}
 JOB_TTL_SECONDS = 60 * 60 * 3
 JOBS = {}
 JOBS_LOCK = threading.Lock()
