@@ -36,6 +36,7 @@ PUBLIC_ASSET_PATHS = {
     "/styles.css",
     "/app.js",
     "/1000media-logo.png",
+    "/1000media-logo-20260719.png",
     "/zoomex-logo.png",
     "/zoomex-card-logo.png",
     "/alliance-latin-logo.png",
