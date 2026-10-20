@@ -27,11 +27,18 @@
     "OPENAI_IMAGE_MODEL": "gpt-image-1",
     "OPENAI_IMAGE_QUALITY": "medium"
   },
+  "composition_rules": [
+    "Every brand prompts all featured people with front-facing heads, visible eyes, and direct eye contact with the camera, with or without reference photos.",
+    "Script and extra-prompt instructions may change the scene and body pose but cannot override head or gaze direction.",
+    "Every final rendered option is checked for gaze and visibility without identity recognition; a gaze or visibility failure permits one regeneration from the original references when supplied.",
+    "Unavailable or malformed verification stops creation, and the browser hides any result without confirmed checks for all options.",
+    "CLI --subject-image requires configured OpenAI for one final camera-facing check of the supplied scene."
+  ],
   "person_reference_notes": [
     "Upload one photo per person, up to four references; the next upload appears after each selection.",
     "Every reference displays its original thumbnail and filename and can be replaced or removed before generation.",
     "All selected references are supplied together in order to OpenAI visual planning and image edits; the same existing OPENAI_IMAGE_MODEL setting is used.",
-    "Each person's face, hair, and distinguishing features guide identity while the scene, pose, expression, and clothing can follow the script.",
+    "Each person's facial proportions, hair, and distinguishing features guide identity while the scene, body pose, expression, and clothing can follow the script; heads and eyes stay directed toward the camera.",
     "There are no local cutouts, pasted-photo layers, or intact-photo fallback. No additional key or model setting is required.",
     "Reference controls are locked during a job, and the browser checks every returned thumbnail's reported reference count and edit strategy.",
     "Exact likeness is not guaranteed by image generation; review all faces and hair before use.",

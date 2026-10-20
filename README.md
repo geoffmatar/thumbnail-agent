@@ -23,11 +23,15 @@ Normal flow:
 
 Templates and title fonts are bundled with the app.
 
+Every brand prompts featured people with front-facing heads, visible eyes, and direct eye contact with the camera, with or without reference photos. Script and extra-prompt instructions cannot override this direction.
+
+The final rendered thumbnail receives a vision check for face direction and visibility, without identity recognition. A gaze or visibility failure allows one regeneration, reusing the original references when supplied. An unavailable or malformed check stops creation; the studio shows only results whose checks are confirmed for every option.
+
 ## Person Reference Images
 
 Upload one photo per person, up to four people. The studio starts with **Upload image 1** and reveals the next upload after each selection. Each reference shows its original thumbnail and filename, with Replace and Remove controls; click the thumbnail to enlarge it. References are remembered separately for each brand while the page stays open and are locked during that brand's generation.
 
-All selected photos are supplied together, in order, to visual planning and the OpenAI Images edits request. Each person's face, hair, and distinguishing features guide their identity in the generated scene. The script and extra prompt can change the setting, pose, expression, and clothing so the people appear naturally in context. There is no local cutout, pasted-photo composition, or intact-photo fallback.
+All selected photos are supplied together, in order, to visual planning and the OpenAI Images edits request. Each person's facial proportions, hair, and distinguishing features guide their identity in the generated scene. The script and extra prompt can change the setting, body pose, expression, and clothing while heads and eyes remain directed toward the camera. There is no local cutout, pasted-photo composition, or intact-photo fallback.
 
 The studio verifies that the server reports using every uploaded reference before showing a photo-based result. Exact likeness is not guaranteed by image generation; review all faces and hair before using the thumbnail. Uploading identical image content more than once is rejected; different photos may share a filename.
 
@@ -112,7 +116,7 @@ To use a person reference with a specific agent:
 python3 thumbnail_agent.py render --client alliance-latin --script my-script.txt --title "TITLE HERE" --person-reference person.png --extra-prompt "Show this person arriving at a university campus, smiling in formal clothes."
 ```
 
-For local testing without using image generation:
+To use an existing scene image instead of generating one, OpenAI must still be configured for the final camera-facing check. A supplied image is checked once:
 
 ```bash
 python3 thumbnail_agent.py render --script my-script.txt --title "TITLE HERE" --subject-image test.png

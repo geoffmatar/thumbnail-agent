@@ -78,8 +78,19 @@ class PersonReferenceTests(unittest.TestCase):
         network = mock.patch.object(agent.urllib.request, "urlopen", side_effect=AssertionError("Unexpected network request in offline tests"))
         self.network = network.start()
         self.addCleanup(network.stop)
+        # Transport/rendering fixtures are synthetic colors, so gaze evaluation
+        # is exercised separately in test_camera_facing.py.
+        gaze = mock.patch.object(agent, "validate_camera_facing", return_value={
+            "people_present": True, "visible_people_count": 2,
+            "all_faces_front_facing": True, "all_eyes_on_camera": True,
+            "all_faces_unobstructed": True, "reason": "Offline passing gaze fixture.",
+        })
+        gaze.start()
+        self.addCleanup(gaze.stop)
 
     def assert_reference_metadata(self, result, count):
+        self.assertIs(result["camera_facing_verified"], True)
+        self.assertIs(result["camera_facing_check"]["all_eyes_on_camera"], True)
         self.assertIs(result["person_reference_used"], count > 0)
         self.assertEqual(result["person_reference_count"], count)
         if count:
@@ -463,6 +474,11 @@ class PersonReferenceTests(unittest.TestCase):
                     finally:
                         connection.close()
 
+                status, _, payload = request("GET", "/api/status")
+                self.assertEqual(status, 200)
+                readiness = json.loads(payload)
+                self.assertIs(readiness["camera_facing_required"], True)
+                self.assertEqual(readiness["reference_workflow_version"], 5)
                 status, _, payload = request("POST", "/api/create", bytes(body), {"Content-Type": f"multipart/form-data; boundary={boundary}"})
                 self.assertEqual(status, 202, payload)
                 status_url = json.loads(payload)["status_url"]

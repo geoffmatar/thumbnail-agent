@@ -21,9 +21,13 @@ Do not put `OPENAI_API_KEY` in the code or send it to teammates.
 
 The reference workflow uses the existing server key for visual planning and scene generation. `OPENAI_IMAGE_MODEL` selects the same model for normal generation and reference-image edits and defaults to `gpt-image-1`. `OPENAI_IMAGE_QUALITY` defaults to `medium`. No additional key or reference-model setting is needed.
 
+Across every brand, with or without reference photos, the prompts require front-facing heads, visible eyes, and direct camera eye contact for all featured people. Script and extra-prompt directions cannot override head or gaze direction.
+
+The server audits each final rendered thumbnail for gaze and face visibility, without identity recognition. A gaze or visibility failure permits one regeneration from the original references when supplied. Missing, malformed, or unavailable verification stops the job; the browser also requires a confirmed check for every returned option. The CLI `--subject-image` path still requires configured OpenAI for this check and validates the supplied image once.
+
 ## Person Reference Workflow
 
-Teammates can upload one separate photo per person, up to four references. Uploads appear progressively, with original previews, filenames, Replace, and Remove controls. Every selected photo is sent in order to OpenAI visual planning and the Images edits request. The model uses each person's face, hair, and distinguishing features as identity guidance while the scene, pose, expression, and clothing can follow the script. There is no cutout pipeline or pasted-photo fallback.
+Teammates can upload one separate photo per person, up to four references. Uploads appear progressively, with original previews, filenames, Replace, and Remove controls. Every selected photo is sent in order to OpenAI visual planning and the Images edits request. The model uses each person's facial proportions, hair, and distinguishing features as identity guidance while the scene, body pose, expression, and clothing can follow the script. Heads and eyes remain directed toward the camera. There is no cutout pipeline or pasted-photo fallback.
 
 Reference edits use high input fidelity for `gpt-image-1` and `gpt-image-1.5`; `gpt-image-2` handles high input fidelity automatically. Install the packages in `requirements.txt`; no segmentation model or masking runtime is required.
 
