@@ -50,7 +50,7 @@ def json_response(payload):
     return response
 
 
-def prepared_photo(path, canvas_size, focus_zone):
+def prepared_photo(path, canvas_size, focus_zone, intact=False):
     """Predictable source-photo placement; the real final renderer is tested."""
     with Image.open(path) as original:
         source = original.convert("RGBA")
@@ -67,11 +67,15 @@ def prepared_photo(path, canvas_size, focus_zone):
             "alpha_crop_box": [0, 0, source.width, source.height],
             "source_crop_size": list(source.size),
             "destination_box": [x, y, x + resized.width, y + resized.height],
-            "rendered_size": list(resized.size), "mask_source": "intact_photo", "fallback_reason": None,
+            "rendered_size": list(resized.size),
+            "mask_source": "existing_alpha" if source.getchannel("A").getextrema()[0] < 255 else "intact_photo",
+            "fallback_reason": None,
         }],
         "existing_alpha": source.getchannel("A").getextrema()[0] < 255,
         "fallback_used": False, "fallback_reasons": [], "segmentation_model": None,
         "separator_rows": [], "separator_columns": [],
+        "requires_mask_validation": False,
+        "source_retention": "entire_original_photo", "source_crop_applied": False,
     }
 
 
@@ -167,6 +171,152 @@ class PersonReferenceTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 agent.handle_create("University journey.", "MY JOURNEY | BEGINS", client_slug="alliance-latin", person_reference_path=self.reference)
         render.assert_not_called()
+
+    def mask_candidate(self, path, canvas_size, focus_zone, intact=False):
+        """A visibly incomplete candidate makes any unsafe acceptance observable."""
+        layer, info = prepared_photo(path, canvas_size, focus_zone, intact=intact)
+        if intact:
+            return layer, info
+        box = info["panels"][0]["destination_box"]
+        layer.paste((0, 0, 0, 0), (box[0], box[1], box[2], (box[1] + box[3]) // 2))
+        mask = Image.new("L", tuple(info["source_size"]), 255)
+        mask.paste(0, (0, 0, mask.width, mask.height // 2))
+        mask_path = self.root / "private-source-mask.png"
+        mask.save(mask_path)
+        info.update(requires_mask_validation=True, source_mask_path=str(mask_path))
+        info["panels"][0]["mask_source"] = "u2netp"
+        return layer, info
+
+    def test_mask_audit_accepts_only_explicit_complete_coverage(self):
+        audit = {"all_people_covered": True, "all_heads_and_hair_covered": True,
+                 "all_visible_person_parts_covered": True, "reason": "Every visible part is retained."}
+        config = agent.CLIENTS["alliance-latin"]
+        candidate, info = self.mask_candidate(self.reference, agent.CANVAS_SIZE, agent.client_focus_zone(config))
+        with mock.patch.object(agent, "prepare_reference_photo", side_effect=self.mask_candidate) as prepare, mock.patch.object(agent, "validate_reference_mask", return_value=audit) as validate, mock.patch.object(agent, "create_visual_brief", return_value=self.brief), mock.patch.object(agent, "openai_images_generate", return_value=self.generated_bytes):
+            result = agent.handle_create("University journey.", "SOURCE | PEOPLE", client_slug="alliance-latin", person_reference_path=self.reference)
+        prepare.assert_called_once()
+        validate.assert_called_once_with(self.reference, info["source_mask_path"])
+        composition = result["reference_composition"]
+        self.assertIs(composition["mask_validated"], True)
+        self.assertFalse(composition["fallback_used"])
+        self.assertNotIn("source_mask_path", composition, "The private mask is not public result metadata")
+        background = self.root / "audit-background.png"
+        background.write_bytes(self.generated_bytes)
+        baseline = self.root / "audit-baseline.png"
+        agent.render_thumbnail("SOURCE | PEOPLE", background, baseline, config)
+        box = info["panels"][0]["destination_box"]
+        with Image.open(baseline) as base, Image.open(result["thumbnail"]) as rendered:
+            expected = Image.alpha_composite(base.convert("RGBA"), candidate).convert("RGB")
+            self.assertEqual(rendered.crop(box).tobytes(), expected.crop(box).tobytes())
+
+    def test_uncertain_or_malformed_mask_audits_retain_the_complete_source_photo(self):
+        fields = ("all_people_covered", "all_heads_and_hair_covered", "all_visible_person_parts_covered")
+        complete = dict.fromkeys(fields, True)
+        failures = [("missing-result", None), ("wrong-result-type", [True, True, True]),
+                    ("audit-exception", RuntimeError("Vision service unavailable"))]
+        for field in fields:
+            for value in (False, "true", 1):
+                failures.append((f"{field}-{value!r}", {**complete, field: value}))
+            failures.append((f"{field}-missing", {key: value for key, value in complete.items() if key != field}))
+        config = agent.CLIENTS["alliance-latin"]
+        intact, info = prepared_photo(self.reference, agent.CANVAS_SIZE, agent.client_focus_zone(config), intact=True)
+        box = info["panels"][0]["destination_box"]
+        with mock.patch.object(agent, "create_visual_brief", return_value=self.brief), mock.patch.object(agent, "openai_images_generate", return_value=self.generated_bytes):
+            for label, audit in failures:
+                with self.subTest(audit=label):
+                    validation = {"side_effect": audit} if isinstance(audit, Exception) else {"return_value": audit}
+                    with mock.patch.object(agent, "prepare_reference_photo", side_effect=self.mask_candidate) as prepare, mock.patch.object(agent, "validate_reference_mask", **validation) as validate:
+                        result = agent.handle_create("University journey.", "SOURCE | PEOPLE", client_slug="alliance-latin", person_reference_path=self.reference)
+                    validate.assert_called_once()
+                    self.assertEqual(prepare.call_count, 2)
+                    self.assertIs(prepare.call_args.kwargs["intact"], True)
+                    composition = result["reference_composition"]
+                    self.assertIs(composition["mask_validated"], False)
+                    self.assertIs(composition["fallback_used"], True)
+                    self.assertTrue(composition["fallback_reasons"])
+                    with Image.open(result["thumbnail"]) as rendered:
+                        self.assertEqual(rendered.crop(box).tobytes(), intact.crop(box).convert("RGB").tobytes())
+
+    def test_a_candidate_without_its_mask_fails_closed_before_the_audit(self):
+        def missing_mask(*args, **kwargs):
+            layer, info = self.mask_candidate(*args, **kwargs)
+            info.pop("source_mask_path", None)
+            return layer, info
+
+        with mock.patch.object(agent, "prepare_reference_photo", side_effect=missing_mask) as prepare, mock.patch.object(agent, "validate_reference_mask") as validate, mock.patch.object(agent, "create_visual_brief", return_value=self.brief), mock.patch.object(agent, "openai_images_generate", return_value=self.generated_bytes):
+            result = agent.handle_create("University journey.", "SOURCE | PEOPLE", client_slug="alliance-latin", person_reference_path=self.reference)
+        validate.assert_not_called()
+        self.assertEqual(prepare.call_count, 2)
+        self.assertIs(prepare.call_args.kwargs["intact"], True)
+        self.assertIs(result["reference_composition"]["fallback_used"], True)
+
+    def test_existing_alpha_does_not_require_an_automated_mask_audit(self):
+        cutout = self.root / "existing-cutout.png"
+        patterned_photo(alpha=True).save(cutout)
+        with mock.patch.object(agent, "prepare_reference_photo", side_effect=prepared_photo) as prepare, mock.patch.object(agent, "validate_reference_mask") as validate, mock.patch.object(agent, "create_visual_brief", return_value=self.brief), mock.patch.object(agent, "openai_images_generate", return_value=self.generated_bytes):
+            result = agent.handle_create("University journey.", "SOURCE | PEOPLE", client_slug="alliance-latin", person_reference_path=cutout)
+        prepare.assert_called_once()
+        validate.assert_not_called()
+        self.assertTrue(result["reference_composition"]["existing_alpha"])
+
+    def test_mask_audit_is_a_vision_only_comparison_of_the_source_and_mask(self):
+        mask = self.root / "mask.png"
+        alpha = Image.new("L", (192, 256), 255)
+        alpha.paste(0, (0, 128, 96, 256))
+        alpha.paste(128, (96, 0, 192, 128))
+        alpha.save(mask)
+        audit = {"all_people_covered": True, "all_heads_and_hair_covered": True,
+                 "all_visible_person_parts_covered": True, "reason": "All source regions are retained."}
+        with mock.patch.object(agent, "openai_responses_create", return_value={"output_text": json.dumps(audit)}) as create:
+            self.assertEqual(agent.validate_reference_mask(self.reference, mask), audit)
+        payload = create.call_args.args[0]
+        self.assertNotIn("tools", payload)
+        images = [part for part in payload["input"][1]["content"] if part["type"] == "input_image"]
+        self.assertEqual(len(images), 3)
+        for image, path in zip(images, (self.reference, mask)):
+            self.assertEqual(image["detail"], "high")
+            self.assertEqual(base64.b64decode(image["image_url"].split(",", 1)[1]), path.read_bytes())
+        self.assertEqual(images[2]["detail"], "high")
+        preview_bytes = base64.b64decode(images[2]["image_url"].split(",", 1)[1])
+        with Image.open(self.reference) as source, Image.open(io.BytesIO(preview_bytes)) as preview:
+            expected = Image.new("RGB", source.size, (0, 220, 220))
+            expected.paste(source.convert("RGB"), mask=alpha)
+            self.assertEqual(preview.format, "PNG")
+            self.assertEqual(preview.mode, "RGB")
+            self.assertEqual(preview.size, source.size)
+            self.assertEqual(preview.tobytes(), expected.tobytes())
+        instructions = payload["input"][0]["content"].lower()
+        self.assertIn("every visible person", instructions)
+        self.assertIn("hair", instructions)
+        self.assertIn("if uncertain", instructions)
+
+    def test_mask_audit_rejects_mismatched_source_coordinates_before_calling_the_api(self):
+        for size in ((193, 256), (192, 255)):
+            with self.subTest(mask_size=size):
+                mask = self.root / "mismatched-mask.png"
+                Image.new("L", size, 255).save(mask)
+                with mock.patch.object(agent, "openai_responses_create") as create:
+                    result = agent.validate_reference_mask(self.reference, mask)
+                create.assert_not_called()
+                for field in ("all_people_covered", "all_heads_and_hair_covered", "all_visible_person_parts_covered"):
+                    self.assertIs(result[field], False)
+
+    def test_mask_audit_response_validation_rejects_nonboolean_and_unreadable_answers(self):
+        mask = self.root / "mask.png"
+        Image.new("L", (192, 256), 255).save(mask)
+        fields = ("all_people_covered", "all_heads_and_hair_covered", "all_visible_person_parts_covered")
+        complete = dict.fromkeys(fields, True)
+        malformed = [None, [], {**complete, fields[0]: "true"}, {**complete, fields[1]: 1},
+                     {fields[0]: True, fields[1]: True}, "not JSON"]
+        for answer in malformed:
+            with self.subTest(answer=answer):
+                raw = answer if isinstance(answer, str) else json.dumps(answer)
+                with mock.patch.object(agent, "openai_responses_create", return_value={"output_text": raw}):
+                    result = agent.validate_reference_mask(self.reference, mask)
+                self.assertTrue(all(result[field] is False for field in fields))
+        with mock.patch.object(agent, "openai_responses_create", side_effect=RuntimeError("Vision service unavailable")):
+            result = agent.validate_reference_mask(self.reference, mask)
+        self.assertTrue(all(result[field] is False for field in fields))
 
     def test_non_reference_generation_and_existing_fallback_still_work(self):
         with mock.patch.object(agent, "openai_images_generate", return_value=self.generated_bytes) as generate:

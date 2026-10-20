@@ -25,11 +25,13 @@ Templates and title fonts are bundled with the app.
 
 ## Person Reference Images
 
-Upload a photo when the thumbnail should feature its original people. The app generates a background from the script, then composites the uploaded photo into the thumbnail. Faces, hair, expressions, pose, and clothing come from the original photo and are kept unchanged.
+Upload a photo when the thumbnail should feature its original people. The app generates a background from the script, then composites a checked cutout made from the uploaded photo. The people use their source photo colors and detail; their faces, hair, expressions, pose, and clothing are not generated again.
 
-Opaque photos stay complete, including their original background. Transparent PNG cutouts keep their supplied transparency. For people-only placement, upload a transparent PNG cutout. The photo can still be sent to OpenAI for visual planning.
+Background removal runs locally on the server using the bundled model. Before an automatic cutout is used, OpenAI checks the source photo and candidate mask for coverage of every person, including faces, heads, and hair. This check evaluates coverage and does not identify people. Transparent PNG cutouts keep their supplied transparency. The photo can also be sent to OpenAI for visual planning.
 
-The photo may be proportionally scaled and repositioned to fit the selected brand's image opening. The script and extra prompt control the generated background; requests to change the uploaded people's expression, hairstyle, pose, or clothes do not apply to those people. Review the finished thumbnail for placement, visibility, and supplied transparency.
+If the people cannot be safely isolated or the coverage check is uncertain, the intact original photo is used, including its original background. The completion message explains this fallback. Review the result for complete people, hair, and placement; automatic masking can still require correction, and a supplied transparent PNG gives direct control of the cutout.
+
+The photo or cutout may be proportionally scaled and repositioned to fit the selected brand's image opening. The script and extra prompt control the generated background; requests to change the uploaded people's expression, hairstyle, pose, or clothes do not apply to those people.
 
 Photo selection is locked while that brand's thumbnail is being created. The studio hides a photo-based result if the server does not confirm original-photo composition.
 
@@ -58,6 +60,8 @@ Install the dependencies and start the app:
 python3 -m pip install -r requirements.txt
 python3 thumbnail_agent.py serve
 ```
+
+Install all dependencies from `requirements.txt`; local background removal uses Pillow, NumPy, and ONNX Runtime with bundled `assets/u2netp.onnx`. No masking API key or runtime model download is needed.
 
 Open:
 

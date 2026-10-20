@@ -3,6 +3,7 @@ import argparse
 import base64
 import concurrent.futures
 import itertools
+import io
 import json
 import mimetypes
 import os
@@ -571,6 +572,87 @@ def create_reference_background_brief(
     return brief
 
 
+def validate_reference_mask(person_reference_path, source_mask_path):
+    """Audit spatial mask coverage; no faces are synthesized or identified."""
+    rejected = {
+        "all_people_covered": False,
+        "all_heads_and_hair_covered": False,
+        "all_visible_person_parts_covered": False,
+        "reason": "Could not confirm that background removal retains every person completely.",
+    }
+    if not openai_key():
+        return rejected
+    try:
+        # A source-coordinate color preview makes retained hair much easier to
+        # judge than a smooth white silhouette alone. No pixels are generated.
+        with Image.open(person_reference_path) as photo, Image.open(source_mask_path) as mask:
+            original = ImageOps.exif_transpose(photo).convert("RGB")
+            alpha = mask.convert("L")
+            if alpha.size != original.size:
+                return rejected
+            coverage_preview = Image.new("RGB", original.size, (0, 220, 220))
+            coverage_preview.paste(original, mask=alpha)
+            preview_bytes = io.BytesIO()
+            coverage_preview.save(preview_bytes, "PNG")
+            preview_url = "data:image/png;base64," + base64.b64encode(preview_bytes.getvalue()).decode("ascii")
+        response = openai_responses_create({
+            "model": openai_model(),
+            "reasoning": {"effort": "low"},
+            "input": [
+                {
+                    "role": "developer",
+                    "content": (
+                        "Inspect spatial coverage of a proposed background-removal alpha mask. "
+                        "The first image is the original photograph; the second is its mask at the same coordinates; "
+                        "the third shows the retained original photo colors over cyan, also at the same coordinates. "
+                        "White means fully retained, black means removed, gray is a partially transparent edge. "
+                        "Cyan in the third image is removed background. Use the color preview to check actual retained hair details. "
+                        "Check EVERY visible person and EVERY visible person part, especially complete faces, heads, "
+                        "hair length and hairstyle, glasses, ears, necks, clothing, arms, hands and fingers. "
+                        "Reject a mask that omits any person, cuts hair short, has holes in a face or body, "
+                        "or removes a visible part of a person. Existing cropping at the original photo edge is allowed. "
+                        "A narrow antialiased outer fringe is allowed; human interiors must remain fully opaque. "
+                        "If uncertain, return false. A little retained background is acceptable. "
+                        "A smooth mask outline outside the original hair is safe: judge coverage at matching coordinates, "
+                        "not whether the white outline reproduces individual hair wisps. "
+                        "Do not identify people or judge likeness: only verify that the white mask covers the "
+                        "original photo's human regions. All RGB colors will come directly from that original photo. "
+                        "Return only JSON matching the schema."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "input_text", "text": "Does the proposed mask safely retain all original people, including their entire visible hair and faces?"},
+                        {"type": "input_image", "image_url": image_data_url(person_reference_path), "detail": "high"},
+                        {"type": "input_image", "image_url": image_data_url(source_mask_path), "detail": "high"},
+                        {"type": "input_image", "image_url": preview_url, "detail": "high"},
+                    ],
+                },
+            ],
+            "text": {"format": {
+                "type": "json_schema", "name": "reference_mask_coverage", "strict": True,
+                "schema": {
+                    "type": "object", "additionalProperties": False,
+                    "required": list(rejected),
+                    "properties": {
+                        "all_people_covered": {"type": "boolean"},
+                        "all_heads_and_hair_covered": {"type": "boolean"},
+                        "all_visible_person_parts_covered": {"type": "boolean"},
+                        "reason": {"type": "string"},
+                    },
+                },
+            }},
+        })
+        audit = json.loads(extract_response_text(response))
+        fields = ("all_people_covered", "all_heads_and_hair_covered", "all_visible_person_parts_covered")
+        if not isinstance(audit, dict) or any(type(audit.get(field)) is not bool for field in fields):
+            return rejected
+        return {**{field: audit[field] for field in fields}, "reason": str(audit.get("reason", ""))[:500]}
+    except Exception:
+        return rejected
+
+
 def create_visual_brief(
     script_text,
     title,
@@ -1037,6 +1119,35 @@ def handle_create(
             reference_layer, composition_info = prepare_reference_photo(
                 person_reference_path, CANVAS_SIZE, client_focus_zone(config)
             )
+        source_mask_path = composition_info.pop("source_mask_path", None)
+        if composition_info.get("requires_mask_validation"):
+            if progress_callback:
+                progress_callback(10, "Checking that every face, hairstyle and person is fully retained...")
+            unavailable_audit = {
+                "all_people_covered": False,
+                "all_heads_and_hair_covered": False,
+                "all_visible_person_parts_covered": False,
+                "reason": "The background-removal mask could not be checked.",
+            }
+            try:
+                audit = validate_reference_mask(person_reference_path, source_mask_path) if source_mask_path else unavailable_audit
+            except Exception:
+                audit = unavailable_audit
+            if not isinstance(audit, dict):
+                audit = unavailable_audit
+            validated = all(audit.get(field) is True for field in (
+                "all_people_covered", "all_heads_and_hair_covered", "all_visible_person_parts_covered"
+            ))
+            if not validated:
+                with IMAGE_PROCESSING_LOCK:
+                    reference_layer, composition_info = prepare_reference_photo(
+                        person_reference_path, CANVAS_SIZE, client_focus_zone(config), intact=True
+                    )
+                composition_info.update(
+                    fallback_used=True,
+                    fallback_reasons=["Original photo retained because safe coverage of every person could not be confirmed."],
+                )
+            composition_info.update(mask_validated=validated, mask_validation=audit)
         if reference_layer.mode != "RGBA" or reference_layer.size != CANVAS_SIZE or not reference_layer.getbbox():
             raise RuntimeError("Could not place the original photo. Try a clear photo or a transparent PNG cutout.")
         reference_settings.update(
@@ -1381,6 +1492,8 @@ class ThumbnailHandler(BaseHTTPRequestHandler):
                     "image_model": openai_image_model(),
                     "reference_strategy": REFERENCE_STRATEGY,
                     "reference_preservation": REFERENCE_PRESERVATION,
+                    "reference_workflow_version": 2,
+                    "reference_background_removal": "local_mask_with_coverage_check",
                     "client": public_client_status(config),
                     "clients": {slug: public_client_status(client) for slug, client in CLIENTS.items()},
                     "design_ready": config["design_path"].exists(),

@@ -23,11 +23,13 @@ The photo workflow uses the existing server key for planning and background gene
 
 ## Person Reference Workflow
 
-With a person photo attached, OpenAI generates the background scene. The server then composites the uploaded photo into the selected brand template. The people retain their original faces, hair, expressions, pose, and clothing; only proportional scaling and positioning are applied to fit the image opening.
+With a person photo attached, OpenAI generates the background scene. The server creates a local cutout using source photo colors and detail, then composites it into the selected brand template. Faces, hair, expressions, pose, and clothing are not generated again; only proportional scaling and positioning are applied to fit the image opening.
 
-Opaque photos retain their complete image, including the original background. Transparent PNG cutouts retain their supplied transparency. For people-only placement, teammates should upload a transparent PNG cutout. The photo can still be sent to OpenAI for visual planning.
+Local background removal uses bundled `assets/u2netp.onnx`, NumPy, and ONNX Runtime. Install all dependencies from `requirements.txt` and keep the model in the deployment; no extra masking API key or runtime model download is needed. Before an automatic cutout is accepted, OpenAI checks the source photo and candidate mask for complete coverage of every person's face, head, hair, and body. This coverage check does not identify people and runs once before thumbnail variants are generated. The photo can also be sent to OpenAI for visual planning.
 
-Script and extra-prompt requests apply to the background and do not change the uploaded people's appearance. Teammates should review placement, visibility, and supplied transparency before using the thumbnail.
+The included `.python-version` selects Python 3.12 for native Render deployments, matching the Docker image.
+
+Transparent PNG cutouts retain their supplied transparency. If automatic isolation or the coverage check is uncertain, the intact original photo is used and the completion message explains why. Script and extra-prompt requests apply to the generated background. Teammates should review complete people, hair, and placement before using the thumbnail.
 
 ## Recommended: Render
 

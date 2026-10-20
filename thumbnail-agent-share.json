@@ -28,12 +28,14 @@
     "OPENAI_IMAGE_QUALITY": "medium"
   },
   "person_reference_notes": [
-    "The background is generated from the script, then the uploaded photo is composited into the thumbnail.",
-    "Opaque photos stay complete, including their original background. Transparent PNG cutouts retain their supplied transparency. The photo can still be sent to OpenAI for visual planning.",
-    "The original people, faces, hair, expressions, pose, and clothing stay unchanged; only proportional scaling and positioning are applied to fit the brand.",
+    "The background is generated from the script, then a checked local cutout using original photo colors and detail is composited into the thumbnail.",
+    "Automatic cutouts require an OpenAI coverage check of the source photo and candidate mask for all people, faces, heads, hair, and bodies. The check evaluates coverage and does not identify people.",
+    "Uncertain isolation or coverage falls back to the intact original photo, including its background, with an explicit completion notice. Transparent PNG cutouts retain their supplied transparency.",
+    "Faces, hair, expressions, pose, and clothing are not generated again; only proportional scaling and positioning are applied to fit the brand.",
     "Script and extra-prompt requests change the background, not the uploaded people's appearance.",
     "Use the existing server OpenAI API key for planning and background generation; no separate reference-edit model setting is needed.",
-    "For people-only placement, upload a transparent PNG cutout. Review photo placement, visibility, and supplied transparency."
+    "Install requirements.txt and keep bundled assets/u2netp.onnx for local masking. The existing OpenAI key is used for coverage checks and visual planning.",
+    "Review complete people, hair, and placement; a supplied transparent PNG gives direct control of the cutout."
   ],
   "security_notes": [
     "Do not share your personal OpenAI API key.",
@@ -48,7 +50,7 @@
     "Paste the script.",
     "Optionally upload a photo to keep its original people, faces, hair, expressions, and clothing unchanged in a new background.",
     "Click Create Thumbnail.",
-    "Review photo placement and supplied transparency when a person photo was supplied.",
+    "Review all people, hair, and placement when a person photo was supplied; the completion message explains any intact-photo fallback.",
     "Download the PNG when finished."
   ]
 }

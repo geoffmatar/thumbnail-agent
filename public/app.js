@@ -532,7 +532,14 @@ async function createThumbnail() {
     const doneMessage = createdCount > 1
       ? `Done. Saved ${createdCount} new thumbnails.`
       : "Done. Saved as a new thumbnail.";
-    setStatus(result.used_ai ? doneMessage : "Done with local fallback.", false, jobClient);
+    const referenceFallbackUsed = result.reference_composition?.fallback_used === true
+      || resultItems(result).some((item) => item.reference_composition?.fallback_used === true);
+    const completionMessage = result.used_ai ? doneMessage : "Done with local fallback.";
+    const statusMessage = referenceFallbackUsed
+      ? `${completionMessage} Original photo kept intact because the people could not be safely isolated.`
+      : completionMessage;
+    if (referenceFallbackUsed) updateProgress({ message: statusMessage }, jobClient);
+    setStatus(statusMessage, false, jobClient);
   } catch (error) {
     updateProgress({
       status: "error",
