@@ -24,12 +24,12 @@
         </div>
 
         <div class="project-grid" aria-label="Thumbnail projects">
-          <button id="openZoomex" class="project-tile" type="button" aria-label="Open Zoomex">
-            <span class="project-logo-wrap">
-              <img class="project-logo" src="/zoomex-card-logo.png" alt="ZOOMEX">
+          <button id="openLeverage" class="project-tile" type="button" aria-label="Open Leverage Edu">
+            <span class="project-logo-wrap client-logo-wrap">
+              <img class="project-logo client-logo" src="/leverage-card-logo.png" alt="Leverage Edu">
             </span>
             <span class="project-copy">
-              <span class="project-name">Zoomex</span>
+              <span class="project-name">Leverage Edu</span>
             </span>
             <span class="project-action" aria-hidden="true">
               <svg viewBox="0 0 24 24">
@@ -99,14 +99,19 @@
             </span>
           </button>
 
-          <button class="project-tile project-tile-pending" type="button" disabled>
-            <span class="project-logo-wrap client-logo-wrap">
-              <img class="project-logo client-logo" src="/leverage-card-logo.png" alt="Leverage Edu">
+          <button id="openZoomex" class="project-tile" type="button" aria-label="Open Zoomex">
+            <span class="project-logo-wrap">
+              <img class="project-logo" src="/zoomex-card-logo.png" alt="ZOOMEX">
             </span>
             <span class="project-copy">
-              <span class="project-name">Leverage Edu</span>
+              <span class="project-name">Zoomex</span>
             </span>
-            <span class="project-status">Coming soon</span>
+            <span class="project-action" aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <path d="M5 12h14"></path>
+                <path d="m13 6 6 6-6 6"></path>
+              </svg>
+            </span>
           </button>
 
           <button class="project-tile project-tile-pending" type="button" disabled>
@@ -186,7 +191,7 @@
               <label class="dropzone title-card">
                 <span>Title</span>
                 <input id="titleInput" type="text" autocomplete="off" placeholder="Enter the title here...">
-                <small>Use | to force the line break.</small>
+                <small id="titleHelp">Use | to force the line break.</small>
               </label>
             </div>
 
@@ -204,7 +209,7 @@
               <span>Person Reference (Optional)</span>
               <input id="personReference" type="file" accept="image/*">
               <span id="referenceFileName" class="reference-button">Upload reference image</span>
-              <small>Use when the script needs a specific person.</small>
+              <small>Preserve facial identity; outfits, expressions, and scene may change.</small>
             </label>
 
           </section>

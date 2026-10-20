@@ -5,12 +5,14 @@ const openAlliance = document.querySelector("#openAlliance");
 const openAllianceBlack = document.querySelector("#openAllianceBlack");
 const openAllianceLgbtq = document.querySelector("#openAllianceLgbtq");
 const openSiyata = document.querySelector("#openSiyata");
+const openLeverage = document.querySelector("#openLeverage");
 const backHome = document.querySelector("#backHome");
 const createBtn = document.querySelector("#createBtn");
 const statusLine = document.querySelector("#statusLine");
 const studioLogo = document.querySelector("#studioLogo");
 const studioTitle = document.querySelector("#studioTitle");
 const titleInput = document.querySelector("#titleInput");
+const titleHelp = document.querySelector("#titleHelp");
 const scriptText = document.querySelector("#scriptText");
 const extraPrompt = document.querySelector("#extraPrompt");
 const personReference = document.querySelector("#personReference");
@@ -70,6 +72,16 @@ const clients = {
     title: "Thumbnail agent",
     placeholder: "SIYATA",
   },
+  "leverage-edu": {
+    slug: "leverage-edu",
+    bodyClass: "leverage-edu-mode",
+    logo: "/leverage-logo.png",
+    alt: "Leverage Edu",
+    title: "Thumbnail agent",
+    placeholder: "LEVERAGE EDU",
+    titlePlaceholder: "MY JOURNEY TO | UNIVERSITY OF | SALFORD",
+    titleHelp: "Use | for 3 lines. The last line is highlighted turquoise.",
+  },
 };
 
 const clientStates = Object.fromEntries(
@@ -107,6 +119,8 @@ function showView(view, updateUrl = false) {
     studioLogo.src = client.logo;
     studioLogo.alt = client.alt;
     studioTitle.textContent = client.title;
+    titleInput.placeholder = client.titlePlaceholder || "Enter the title here...";
+    titleHelp.textContent = client.titleHelp || "Use | to force the line break.";
     hydrateClientState(client.slug);
     loadStatus(client.slug);
   }
@@ -522,6 +536,7 @@ openAlliance.addEventListener("click", () => showView("alliance-latin", true));
 openAllianceBlack.addEventListener("click", () => showView("alliance-black", true));
 openAllianceLgbtq.addEventListener("click", () => showView("alliance-lgbtq", true));
 openSiyata.addEventListener("click", () => showView("siyata", true));
+openLeverage.addEventListener("click", () => showView("leverage-edu", true));
 backHome.addEventListener("click", () => showView("home", true));
 window.addEventListener("hashchange", syncViewFromUrl);
 titleInput.addEventListener("input", () => {

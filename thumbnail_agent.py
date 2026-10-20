@@ -2,6 +2,7 @@
 import argparse
 import base64
 import concurrent.futures
+import itertools
 import json
 import mimetypes
 import os
@@ -32,6 +33,7 @@ WORK_DIR = APP_DIR / "work"
 
 OPENAI_ENDPOINT = "https://api.openai.com/v1/responses"
 OPENAI_IMAGES_GENERATE_ENDPOINT = "https://api.openai.com/v1/images/generations"
+OPENAI_IMAGES_EDIT_ENDPOINT = "https://api.openai.com/v1/images/edits"
 PUBLIC_ASSET_PATHS = {
     "/styles.css",
     "/app.js",
@@ -77,6 +79,8 @@ ALLIANCE_LGBTQ_DESIGN_PATH = ASSETS_DIR / "alliance-lgbtq-design.png"
 ALLIANCE_FONT_PATH = ASSETS_DIR / "Poppins-Bold.ttf"
 SIYATA_DESIGN_PATH = ASSETS_DIR / "siyata-design.png"
 SIYATA_FONT_PATH = ASSETS_DIR / "HelveticaNeueLTArabic-Bold.ttf"
+LEVERAGE_DESIGN_PATH = ASSETS_DIR / "leverage-edu-design.png"
+LEVERAGE_FONT_PATH = ASSETS_DIR / "Gagalin-Regular.otf"
 FOCUS_ZONE = {"x": 210, "y": 560, "w": 660, "h": 660}
 CLIENTS = {
     "zoomex": {
@@ -139,6 +143,24 @@ CLIENTS = {
             {"x": -10, "y": 1376, "w": 1052, "h": 108, "radius": 58, "fill": (237, 49, 134, 255), "text_fill": "#ffffff", "font_max": 74, "font_min": 34, "text_center_x": 540},
         ],
     },
+    "leverage-edu": {
+        "slug": "leverage-edu",
+        "display_name": "Leverage Edu",
+        "prompt_name": "Leverage Edu",
+        "design_path": LEVERAGE_DESIGN_PATH,
+        "font_path": LEVERAGE_FONT_PATH,
+        "font_label": "Gagalin ready",
+        "design_label": "Leverage Edu design ready",
+        "logo_area": "left Leverage Edu logo area at x=0..384, y=353..642",
+        "subject_position": "to the right of the Leverage Edu logo and above the lower headline panel",
+        "template_context": "fixed Leverage Edu testimonial design with the original logo, navy-to-turquoise lower gradient, and three white headline lines, the last on a turquoise rectangle",
+        "focus_zone": {"x": 400, "y": 460, "w": 640, "h": 510},
+        "title_bands": [
+            {"x": 188, "y": 1066, "w": 704, "h": 96, "radius": 0, "fill": None, "text_fill": "#ffffff", "font_max": 106, "font_min": 30, "text_padding": 0, "text_height_ratio": 0.82},
+            {"x": 188, "y": 1193, "w": 704, "h": 96, "radius": 0, "fill": None, "text_fill": "#ffffff", "font_max": 106, "font_min": 30, "text_padding": 0, "text_height_ratio": 0.82},
+            {"x": 188, "y": 1311, "w": 704, "h": 128, "radius": 0, "fill": (84, 188, 200, 255), "text_fill": "#ffffff", "font_max": 106, "font_min": 30, "text_padding": 48},
+        ],
+    },
     "siyata": {
         "slug": "siyata",
         "display_name": "Siyata",
@@ -196,30 +218,37 @@ def public_client_status(config):
     }
 
 
+def client_focus_zone(config):
+    return config.get("focus_zone", FOCUS_ZONE)
+
+
+def subject_position(config):
+    return config.get("subject_position", f"below the {config['prompt_name']} logo area and above the title bars")
+
+
 def focus_zone_prompt(config=None):
     config = config or get_client_config(DEFAULT_CLIENT)
-    x1 = FOCUS_ZONE["x"]
-    y1 = FOCUS_ZONE["y"]
-    x2 = FOCUS_ZONE["x"] + FOCUS_ZONE["w"]
-    y2 = FOCUS_ZONE["y"] + FOCUS_ZONE["h"]
+    zone = client_focus_zone(config)
+    x1, y1 = zone["x"], zone["y"]
+    x2, y2 = x1 + zone["w"], y1 + zone["h"]
     return (
-        f"SAFE ZONE RULE, NON-NEGOTIABLE: the hero of the script must live inside the central safe square "
+        f"SAFE ZONE RULE, NON-NEGOTIABLE: the hero of the script must live inside the safe area "
         f"from x={x1} to {x2}, y={y1} to {y2} on a 1080x1920 canvas. "
-        f"This safe square is below the {config['prompt_name']} logo area and above the title bars. "
+        f"This safe area is {subject_position(config)}. "
         "Treat the top area above this square as background/logo space only, never hero-subject space. "
         "The hero can be a person, face, athlete, vehicle, robot, product, object, or key action. "
-        "The hero's important details, visual center, and main readable features must be centered inside this safe square. "
+        "The hero's important details, visual center, and main readable features must be centered inside this safe area. "
         f"Nothing important may sit above y={y1}. "
-        "MANDATORY LIGHTING RULE: any main subject in this central square, including vehicles, robots, products, tools, or other key objects, "
+        "MANDATORY LIGHTING RULE: any main subject in this safe area, including vehicles, robots, products, tools, or other key objects, "
         "must be well-lit, cinematic, sharp, and clearly readable with visible surface detail, strong key light, and subtle rim or edge light. "
         "Do not make the central subject dark, muddy, silhouetted, or low-contrast. "
         "MANDATORY HUMAN RULE: if any human appears, the face, eyes, full head, shoulders, and upper half-body must be centered "
-        f"inside this safe square, below the {config['prompt_name']} logo area. The top of the head, hair, eyes, and face must never appear above "
+        f"inside this safe area, {subject_position(config)}. The top of the head, hair, eyes, and face must never appear above "
         f"y={y1}, behind the logo, overlapping the logo, near the top edge, or higher than the logo. "
-        f"Place the face center around x=540 and between y={y1 + 90} and y={y1 + 260}. "
-        "The face should appear lower than the logo, with clear breathing room between the logo and the head. "
-        "Do not use tight close-up portraits or headshots that push the face into the top half of the image; zoom out and lower the subject "
-        "so the person reads as a centered half-body or full-body hero inside the safe square. "
+        f"Place the face center around x={x1 + zone['w'] // 2} and between y={y1 + 90} and y={y1 + 260}. "
+        "Leave clear breathing room between the logo and the head. "
+        "Do not use tight close-up portraits or headshots that push the face outside this safe area; zoom out and position the subject "
+        "so the person reads as a centered half-body or full-body hero inside the safe area. "
         f"The subject may extend beyond the square, but no important face, eyes, head, hero object, vehicle, robot, product, or key action should be hidden by the {config['logo_area']} "
         "or by the title bars at the bottom. If there is any conflict, prioritize safe-zone placement over dramatic cropping."
     )
@@ -227,26 +256,33 @@ def focus_zone_prompt(config=None):
 
 def safe_zone_negative_prompt(config=None):
     config = config or get_client_config(DEFAULT_CLIENT)
+    zone = client_focus_zone(config)
     return (
-        f"face above {config['prompt_name']} logo, head above logo, eyes above logo, face above y={FOCUS_ZONE['y']}, "
-        f"head above y={FOCUS_ZONE['y']}, hero above y={FOCUS_ZONE['y']}, important subject above logo, "
+        f"face above y={zone['y']}, head above y={zone['y']}, hero above y={zone['y']}, "
+        f"face or important subject overlapping {config['logo_area']}, "
         "hero outside safe zone, hero hidden behind logo, important object behind logo, dark central subject, underlit main object"
     )
 
 
 def person_reference_prompt(config=None):
     config = config or get_client_config(DEFAULT_CLIENT)
-    x1 = FOCUS_ZONE["x"]
-    y1 = FOCUS_ZONE["y"]
-    x2 = FOCUS_ZONE["x"] + FOCUS_ZONE["w"]
-    y2 = FOCUS_ZONE["y"] + FOCUS_ZONE["h"]
+    zone = client_focus_zone(config)
+    x1, y1 = zone["x"], zone["y"]
+    x2, y2 = x1 + zone["w"], y1 + zone["h"]
     return (
-        "A person reference image is attached. Use the person in that image as the main human subject for the new thumbnail scene. "
-        "Use the reference as identity guidance only: create a fresh cinematic image from the script, with a new background, new lighting, and a natural thumbnail composition. "
-        "Do not paste the uploaded photo into the thumbnail, do not keep its original background, do not make a collage or rectangular photo insert, and do not turn the person into an illustration or drawing. "
-        "The person may have a new pose, wardrobe, scale, camera angle, and environment if that helps the thumbnail. "
-        f"Safe-zone placement still controls everything: the person's face, head, eyes, shoulders, upper body, and any important object must stay inside x={x1}..{x2}, y={y1}..{y2}, "
-        f"below the {config['prompt_name']} logo area and above the title bars."
+        "PERSON IDENTITY PRESERVATION: the attached photograph is the identity source for every person shown in it. "
+        "Keep every pictured person as the same recognizable individual; preserve each person's facial structure, facial proportions, "
+        "eyes, nose, mouth, jawline, distinguishing facial features, apparent age, skin tone, and overall likeness. "
+        "Do not replace a person with a generic lookalike, invent a different face, beautify or reshape facial features, "
+        "merge or mix identities, swap faces between people, duplicate a person, or omit anyone from a multi-person reference. "
+        "Keep each person's features associated with that same person. "
+        "Clothing, pose, background, setting, and lighting may change to suit the script. "
+        "Facial expressions may change naturally, including a smile or sadness, while preserving the same underlying facial anatomy and identity. "
+        "Create a natural photographic scene rather than a collage, rectangular photo insert, illustration, or drawing. "
+        f"Fit all referenced people {subject_position(config)}, aiming for x={x1}..{x2}, y={y1}..{y2}. "
+        "Adapt the composition by repositioning or proportionally scaling people and extending the surrounding scene or canvas; "
+        "never alter facial identity to satisfy the composition. If placement conflicts with identity preservation, "
+        "preserve every person's identity and visibility first."
     )
 
 
@@ -300,6 +336,26 @@ def openai_model():
 
 def openai_image_model():
     return os.environ.get("OPENAI_IMAGE_MODEL", "gpt-image-1")
+
+
+def openai_reference_image_model():
+    return (
+        os.environ.get("OPENAI_REFERENCE_IMAGE_MODEL", "").strip()
+        or openai_image_model().strip()
+        or "gpt-image-1"
+    )
+
+
+def reference_input_fidelity_parameter(model=None):
+    model = model or openai_reference_image_model()
+    if model in {"gpt-image-1", "gpt-image-1.5"}:
+        return "high"
+    if re.match(r"^gpt-image-2(?:[.-]|$)", model):
+        return None
+    raise RuntimeError(
+        "The configured reference image model does not support this identity-preserving workflow. "
+        "Set OPENAI_REFERENCE_IMAGE_MODEL to gpt-image-1, gpt-image-1.5, or a supported gpt-image-2 model."
+    )
 
 
 def env_int(name, default):
@@ -412,6 +468,63 @@ def openai_images_generate(prompt, timeout=None):
     return extract_image_api_bytes(result, "OpenAI image generation did not return generated image data.")
 
 
+def openai_images_edit(prompt, reference_path, timeout=None):
+    api_key = openai_key()
+    if not api_key:
+        raise RuntimeError("Add your OpenAI API key before generating thumbnails.")
+    timeout = timeout or openai_image_timeout()
+    model = openai_reference_image_model()
+    input_fidelity = reference_input_fidelity_parameter(model)
+    fields = {
+        "model": model,
+        "prompt": prompt,
+        "size": "1024x1536",
+        "quality": openai_image_quality(),
+    }
+    if input_fidelity:
+        fields["input_fidelity"] = input_fidelity
+
+    reference_path = Path(reference_path)
+    reference_bytes = reference_path.read_bytes()
+    if not reference_bytes:
+        raise RuntimeError("The reference image is empty. Upload a clear JPG, PNG, or WebP photo.")
+    boundary = f"----ThumbnailAgent{uuid.uuid4().hex}"
+    parts = []
+    for name, value in fields.items():
+        parts.append(
+            f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"\r\n\r\n{value}\r\n'.encode("utf-8")
+        )
+    suffix = reference_path.suffix.lower()
+    filename = "reference" + (suffix if suffix in {".jpg", ".jpeg", ".png", ".webp"} else ".jpg")
+    mime_type = mimetypes.guess_type(filename)[0] or "image/jpeg"
+    parts.append(
+        f'--{boundary}\r\nContent-Disposition: form-data; name="image"; filename="{filename}"\r\n'
+        f"Content-Type: {mime_type}\r\n\r\n".encode("utf-8")
+    )
+    parts.extend([reference_bytes, f"\r\n--{boundary}--\r\n".encode("ascii")])
+    request = urllib.request.Request(
+        OPENAI_IMAGES_EDIT_ENDPOINT,
+        data=b"".join(parts),
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": f"multipart/form-data; boundary={boundary}",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            result = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as error:
+        body_text = error.read().decode("utf-8", errors="replace")
+        try:
+            message = json.loads(body_text).get("error", {}).get("message") or body_text
+        except json.JSONDecodeError:
+            message = body_text
+        raise RuntimeError(f"OpenAI reference image editing failed: {message}") from error
+
+    return extract_image_api_bytes(result, "OpenAI reference image editing did not return generated image data.")
+
+
 def extract_response_text(response):
     if isinstance(response.get("output_text"), str):
         return response["output_text"]
@@ -444,8 +557,8 @@ def user_friendly_error(error):
         )
     if "recognizable identity" in lowered and "public figure" in lowered:
         return (
-            "OpenAI cannot recreate a recognizable public figure from an uploaded photo. "
-            "Use the script without a reference image, or upload a photo of a non-public person you have permission to use."
+            "OpenAI declined this image request because of its identity or public-figure restrictions. "
+            "Review the requested scene and reference image, then try an allowed request."
         )
     return message
 
@@ -480,10 +593,13 @@ def create_visual_brief(
     variant_index=1,
     variant_count=1,
     extra_prompt="",
+    person_reference_path=None,
 ):
+    has_person_reference = bool(person_reference_path) or has_person_reference
+    zone = client_focus_zone(config)
     reference_note = ""
     reference_public_figure_note = (
-        "If a person reference image is supplied, build the scene around the person from the attached reference image instead of inventing a different person. "
+        person_reference_prompt(config)
         if has_person_reference
         else (
             "When the script mentions a public figure, do not request an exact recognizable likeness; "
@@ -499,8 +615,9 @@ def create_visual_brief(
         )
     if has_person_reference:
         reference_note = (
-            "A person reference image will be attached during image generation. "
-            "Describe the main human as the person from the attached reference image, placed naturally into the new scene. "
+            "The attached person reference photo will also be used during image editing. "
+            "Build the scene around every person pictured, preserving their individual identities and facial features. "
+            "Do not invent replacement appearances from the script or remove people from the reference. "
         )
     extra_prompt = (extra_prompt or "").strip()
     extra_prompt_note = ""
@@ -517,6 +634,7 @@ def create_visual_brief(
                 f"{reference_note}"
                 f"{variant_note}"
                 f"{extra_prompt_note}"
+                f"{reference_public_figure_note if has_person_reference else ''} "
                 f"No text, no captions, no logos, no black empty poster space. {focus_zone_prompt(config)}"
             ),
             "negative_prompt": (
@@ -535,10 +653,10 @@ def create_visual_brief(
                 "content": (
                     "You create visual concepts for vertical social thumbnails. "
                     f"The title is supplied by the user and will be rendered later in fixed {config['prompt_name']} title bars. "
-                    f"Safe-zone composition is mandatory: the hero subject must be centered in x={FOCUS_ZONE['x']}..{FOCUS_ZONE['x'] + FOCUS_ZONE['w']} "
-                    f"and y={FOCUS_ZONE['y']}..{FOCUS_ZONE['y'] + FOCUS_ZONE['h']}. "
-                    f"Human composition is strict: faces, eyes, full heads, shoulders, and upper half-bodies must be centered below the {config['prompt_name']} logo area, never above it. "
-                    f"For any human, the entire face/head/eyes must stay below y={FOCUS_ZONE['y']}; never above or overlapping the logo. "
+                    f"Safe-zone composition is mandatory: the hero subject must be centered in x={zone['x']}..{zone['x'] + zone['w']} "
+                    f"and y={zone['y']}..{zone['y'] + zone['h']}. "
+                    f"Human composition is strict: faces, eyes, full heads, shoulders, and upper half-bodies must be {subject_position(config)}. "
+                    f"For any human, the entire face/head/eyes must stay below y={zone['y']} and outside the logo area. "
                     "Avoid tight closeups; zoom out and lower the hero subject when needed. "
                     "Central-subject lighting is strict: any main person, vehicle, robot, product, or key object must be well-lit, cinematic, and clearly readable. "
                     f"{reference_public_figure_note}"
@@ -584,6 +702,10 @@ def create_visual_brief(
             }
         },
     }
+    if person_reference_path:
+        payload["input"][1]["content"].append(
+            {"type": "input_image", "image_url": image_data_url(person_reference_path), "detail": "high"}
+        )
     return json.loads(extract_response_text(openai_responses_create(payload)))
 
 
@@ -595,7 +717,12 @@ def combined_negative_prompt(brief, config):
     )
 
 
-def standard_subject_image_prompt(brief, config, negative_prompt):
+def standard_subject_image_prompt(brief, config, negative_prompt, has_person_reference=False):
+    zone = client_focus_zone(config)
+    public_figure_note = (
+        "" if has_person_reference else
+        "If the script mentions a public figure, do not recreate their exact recognizable identity unless the image policy allows it; use a fictional person in the same role if needed. "
+    )
     return (
         f"{brief['visual_prompt']}\n\n"
         "Hard requirements: vertical 9:16, full-bleed image, no text, no readable letters, no logos, no watermarks. "
@@ -604,13 +731,13 @@ def standard_subject_image_prompt(brief, config, negative_prompt):
         "Any main central subject, including vehicles, robots, products, tools, or other key objects, must be well-lit, cinematic, sharp, and clearly readable; "
         "avoid dark, muddy, silhouetted, or low-contrast central subjects. "
         f"SAFE-ZONE COMPOSITION IS MORE IMPORTANT THAN DRAMA: the hero subject's face, object, vehicle, robot, product, or key action must be centered in "
-        f"x={FOCUS_ZONE['x']}..{FOCUS_ZONE['x'] + FOCUS_ZONE['w']}, y={FOCUS_ZONE['y']}..{FOCUS_ZONE['y'] + FOCUS_ZONE['h']}. "
-        f"If humans are present, the main face and upper half-body must be centered below the {config['prompt_name']} logo area; "
-        f"the full face, head, and eyes must stay below y={FOCUS_ZONE['y']}; do not place any face above the logo height or near the top of the frame. "
-        "Avoid close-up headshots; zoom out and lower the person so the face and half-body sit inside the central safe square. "
+        f"x={zone['x']}..{zone['x'] + zone['w']}, y={zone['y']}..{zone['y'] + zone['h']}. "
+        f"If humans are present, the main face and upper half-body must be {subject_position(config)}; "
+        f"the full face, head, and eyes must stay below y={zone['y']} and outside the logo area. "
+        "Avoid close-up headshots; zoom out and position the person so the face and half-body sit inside the safe area. "
         f"{focus_zone_prompt(config)} "
         "Keep the area behind the title bars lower contrast but still visually present. "
-        "If the script mentions a public figure, do not recreate their exact recognizable identity unless the image policy allows it; use a fictional person in the same role if needed. "
+        f"{public_figure_note}"
         f"Avoid: {negative_prompt}."
     )
 
@@ -635,17 +762,16 @@ def image_generation_payload(prompt, person_reference_path=None):
 
 def generate_subject_image(brief, config, person_reference_path=None):
     negative_prompt = combined_negative_prompt(brief, config)
-    prompt = standard_subject_image_prompt(brief, config, negative_prompt)
+    prompt = standard_subject_image_prompt(
+        brief, config, negative_prompt, has_person_reference=bool(person_reference_path)
+    )
     if person_reference_path:
         prompt = f"{prompt}\n\n{person_reference_prompt(config)}"
     prompts = [prompt]
     last_error = None
 
     if person_reference_path:
-        payload = image_generation_payload(prompt, person_reference_path)
-        image_bytes = base64.b64decode(
-            extract_image_base64(openai_responses_create(payload, timeout=openai_image_timeout()))
-        )
+        image_bytes = openai_images_edit(prompt, person_reference_path)
         image_path = WORK_DIR / f"subject-{uuid.uuid4().hex}.png"
         image_path.write_bytes(image_bytes)
         return image_path
@@ -710,6 +836,43 @@ def split_title(title):
     return " ".join(words[:split_at]), " ".join(words[split_at:])
 
 
+def balanced_title_lines(text, line_count, config):
+    words = text.split()
+    if len(words) <= line_count:
+        return [""] * (line_count - len(words)) + words
+    font = resolve_font(106, config)
+    space_width = font.getlength(" ")
+    widths = [0]
+    for word in words:
+        widths.append(widths[-1] + font.getlength(word) + space_width)
+    target = (widths[-1] - space_width * line_count) / line_count
+
+    def balance_score(cuts):
+        edges = (0, *cuts, len(words))
+        return sum(
+            (widths[end] - widths[start] - space_width - target) ** 2
+            for start, end in zip(edges, edges[1:])
+        )
+
+    cuts = min(itertools.combinations(range(1, len(words)), line_count - 1), key=balance_score)
+    edges = (0, *cuts, len(words))
+    return [" ".join(words[start:end]) for start, end in zip(edges, edges[1:])]
+
+
+def split_title_lines(title, config):
+    line_count = len(config["title_bands"])
+    if line_count == 2:
+        return list(split_title(title))
+    parts = [" ".join(part.split()) for part in re.split(r"[|\n/]", title.upper())]
+    parts = [part for part in parts if part]
+    if len(parts) >= line_count:
+        return parts[:line_count - 1] + [" ".join(parts[line_count - 1:])]
+    if len(parts) == 2 and line_count == 3:
+        # Keep a manually selected final phrase in the highlighted third line.
+        return balanced_title_lines(parts[0], 2, config) + [parts[1]]
+    return balanced_title_lines(" ".join(parts), line_count, config)
+
+
 def fit_font(text, max_width, max_height, max_size, min_size, config=None):
     probe = Image.new("RGBA", (10, 10), (0, 0, 0, 0))
     draw = ImageDraw.Draw(probe)
@@ -755,8 +918,7 @@ def adjust_subject(image):
 
 
 def draw_title(canvas, title, config):
-    top_text, bottom_text = split_title(title)
-    title_lines = [top_text, bottom_text]
+    title_lines = split_title_lines(title, config)
     draw = ImageDraw.Draw(canvas)
 
     for index, band in enumerate(config["title_bands"]):
@@ -770,8 +932,8 @@ def draw_title(canvas, title, config):
         if text:
             font = fit_font(
                 text,
-                band["w"] - 88,
-                band["h"] * 0.72,
+                band["w"] - band.get("text_padding", 88),
+                band["h"] * band.get("text_height_ratio", 0.72),
                 band.get("font_max", 88),
                 band.get("font_min", 38),
                 config,
@@ -816,7 +978,7 @@ def normalize_reference_image(path, delete_source=False):
     except Exception as error:
         raise RuntimeError("Could not read the uploaded reference image. Try a clear JPG or PNG photo.") from error
 
-    image.thumbnail((1600, 1600), Image.Resampling.LANCZOS)
+    image.thumbnail((2048, 2048), Image.Resampling.LANCZOS)
     if image.mode in ("RGBA", "LA"):
         background = Image.new("RGB", image.size, (255, 255, 255))
         alpha = image.getchannel("A") if image.mode == "RGBA" else image.getchannel("A")
@@ -825,8 +987,9 @@ def normalize_reference_image(path, delete_source=False):
     else:
         image = image.convert("RGB")
 
-    output_path = WORK_DIR / f"person-reference-{uuid.uuid4().hex}.jpg"
-    image.save(output_path, "JPEG", quality=92, optimize=True)
+    WORK_DIR.mkdir(parents=True, exist_ok=True)
+    output_path = WORK_DIR / f"person-reference-{uuid.uuid4().hex}.png"
+    image.save(output_path, "PNG", optimize=True)
     if delete_source:
         try:
             path.unlink(missing_ok=True)
@@ -842,10 +1005,10 @@ def save_upload(form, name):
     if isinstance(field, list):
         field = field[0] if field else None
     if field is None or not getattr(field, "filename", ""):
-        return None
+        raise RuntimeError("Select a reference photo to upload, or remove the reference field.")
     data = field.file.read()
     if not data:
-        return None
+        raise RuntimeError("The reference image is empty. Upload a clear JPG, PNG, or WebP photo.")
     if len(data) > 20 * 1024 * 1024:
         raise RuntimeError("Reference image is too large. Upload an image under 20 MB.")
     upload_name = safe_filename(Path(field.filename).stem, "reference")
@@ -872,6 +1035,33 @@ def handle_create(
     if not script_text.strip():
         raise RuntimeError("Paste the script first.")
     extra_prompt = (extra_prompt or "").strip()
+    if subject_path and person_reference_path is not None:
+        raise RuntimeError("Use either a subject image or a person reference, not both.")
+    reference_settings = {
+        "reference_strategy": None,
+        "reference_image_model": None,
+        "reference_input_fidelity": None,
+        "reference_input_fidelity_parameter": None,
+    }
+    if person_reference_path is not None:
+        try:
+            person_reference_path = Path(person_reference_path)
+            if not person_reference_path.is_file() or person_reference_path.stat().st_size == 0:
+                raise ValueError("Missing or empty reference image.")
+            with Image.open(person_reference_path) as reference_image:
+                reference_image.verify()
+        except Exception as error:
+            raise RuntimeError(
+                "Could not read the reference image. Upload a valid, non-empty JPG, PNG, or WebP photo."
+            ) from error
+        reference_model = openai_reference_image_model()
+        input_fidelity = reference_input_fidelity_parameter(reference_model)
+        reference_settings.update(
+            reference_strategy="images_edit",
+            reference_image_model=reference_model,
+            reference_input_fidelity="high",
+            reference_input_fidelity_parameter=input_fidelity,
+        )
 
     thumbnail_count = 2 if config["slug"] in TWO_THUMBNAIL_CLIENTS else 1
     timestamp = time.strftime("%Y%m%d-%H%M%S")
@@ -891,6 +1081,7 @@ def handle_create(
             variant_index=variant_index,
             variant_count=thumbnail_count,
             extra_prompt=extra_prompt,
+            person_reference_path=person_reference_path,
         )
 
         if progress_callback and show_detailed_progress:
@@ -933,6 +1124,7 @@ def handle_create(
             "option_index": variant_index,
             "option_count": thumbnail_count,
             "option_label": option_label,
+            **reference_settings,
         }
         save_json(output_path.with_suffix(".json"), meta)
         return meta
@@ -1052,6 +1244,10 @@ def run_create_job(job_id, script_text, title, client_slug=DEFAULT_CLIENT, perso
                     "option_index": item.get("option_index", 1),
                     "option_count": item.get("option_count", len(source_thumbnails)),
                     "option_label": item.get("option_label", ""),
+                    "reference_strategy": item.get("reference_strategy"),
+                    "reference_image_model": item.get("reference_image_model"),
+                    "reference_input_fidelity": item.get("reference_input_fidelity"),
+                    "reference_input_fidelity_parameter": item.get("reference_input_fidelity_parameter"),
                 }
             )
         primary_result = result_thumbnails[0]
@@ -1066,6 +1262,10 @@ def run_create_job(job_id, script_text, title, client_slug=DEFAULT_CLIENT, perso
             "used_ai": meta["used_ai"],
             "person_reference_used": meta.get("person_reference_used", False),
             "extra_prompt_used": meta.get("extra_prompt_used", False),
+            "reference_strategy": meta.get("reference_strategy"),
+            "reference_image_model": meta.get("reference_image_model"),
+            "reference_input_fidelity": meta.get("reference_input_fidelity"),
+            "reference_input_fidelity_parameter": meta.get("reference_input_fidelity_parameter"),
             "thumbnails": result_thumbnails,
         }
         update_job(

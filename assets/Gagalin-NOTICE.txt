@@ -1,0 +1,17 @@
+Gagalin Regular
+Copyright © 2015 by Iordanis Passas. All rights reserved.
+Manufacturer: Fontfabric LLC.
+
+This is the unmodified Gagalin-Regular OpenType font used by the supplied
+Leverage Edu testimonial PSD. The app uses it to rasterize thumbnail headlines;
+the font is not served to browsers.
+
+Creator's release:
+https://www.behance.net/gallery/21358665/Gagalin-Free-Font
+https://ipassas.gumroad.com/l/gagalin
+
+Fontfabric free-font terms:
+https://www.fontfabric.com/fontfabric-commercial-eula-for-free-fonts/
+
+Font binary source (archived public distribution):
+https://static.wfonts.com/data/2016/07/09/gagalin/Gagalin-Regular.otf

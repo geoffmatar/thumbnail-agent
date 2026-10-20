@@ -1,6 +1,6 @@
 {
   "name": "Thumbnail Agent",
-  "description": "Internal thumbnail generator with brand-specific thumbnail agents, fixed templates, fixed fonts, script-based image generation, optional person reference images, and PNG download.",
+  "description": "Internal thumbnail generator with brand-specific templates and fonts, script-based image generation, optional person-reference edits to preserve facial identity while changing clothing, expressions, and scenes, and PNG download.",
   "repository": {
     "url": "https://github.com/geoffmatar/thumbnail-agent.git",
     "branch": "main"
@@ -23,8 +23,20 @@
   },
   "environment_variables": {
     "OPENAI_API_KEY": "add_their_own_openai_key_here",
-    "OPENAI_MODEL": "gpt-5.5"
+    "OPENAI_MODEL": "gpt-5.5",
+    "OPENAI_IMAGE_MODEL": "gpt-image-1",
+    "OPENAI_IMAGE_QUALITY": "medium"
   },
+  "optional_environment_variables": {
+    "OPENAI_REFERENCE_IMAGE_MODEL": "Optional person-reference edit model; defaults to OPENAI_IMAGE_MODEL when unset."
+  },
+  "person_reference_notes": [
+    "The actual reference photo is supplied to visual planning and directly to the OpenAI Images edits endpoint.",
+    "Reference edits use high input fidelity for gpt-image-1 and gpt-image-1.5; gpt-image-2 handles high input fidelity automatically.",
+    "Use the existing server OpenAI API key; person-reference edits do not require a separate key.",
+    "Outfits, expressions, poses, and scenes may change while preserving facial identity is the goal.",
+    "Compare generated faces with the actual photo before use. Exact identity consistency is not guaranteed or automatically validated."
+  ],
   "security_notes": [
     "Do not share your personal OpenAI API key.",
     "Each copied app should use its own OpenAI API key or a separate company-managed key.",
@@ -34,9 +46,11 @@
     "Open the app.",
     "Choose a thumbnail agent.",
     "Enter the title.",
+    "Leverage Edu uses three headline lines, with the last highlighted turquoise; use MY JOURNEY TO | UNIVERSITY OF | SALFORD to choose the line breaks.",
     "Paste the script.",
-    "Optionally upload a person reference image when the script needs a specific person.",
+    "Optionally upload a photo of the people whose facial identity should be preserved; outfits, expressions, and scenes may change.",
     "Click Create Thumbnail.",
+    "Review the generated people against the actual reference photo when one was supplied.",
     "Download the PNG when finished."
   ]
 }
