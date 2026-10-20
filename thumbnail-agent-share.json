@@ -1,6 +1,6 @@
 {
   "name": "Thumbnail Agent",
-  "description": "Internal thumbnail generator with brand-specific templates and fonts, script-based background generation, optional original-photo composition that keeps uploaded people unchanged, and PNG download.",
+  "description": "Internal thumbnail generator with brand-specific templates and fonts, natural script-based scenes guided by up to four separate person references, and PNG download.",
   "repository": {
     "url": "https://github.com/geoffmatar/thumbnail-agent.git",
     "branch": "main"
@@ -28,14 +28,14 @@
     "OPENAI_IMAGE_QUALITY": "medium"
   },
   "person_reference_notes": [
-    "The background is generated from the script, then a checked local cutout using original photo colors and detail is composited into the thumbnail.",
-    "Automatic cutouts require an OpenAI coverage check of the source photo and candidate mask for all people, faces, heads, hair, and bodies. The check evaluates coverage and does not identify people.",
-    "Uncertain isolation or coverage falls back to the intact original photo, including its background, with an explicit completion notice. Transparent PNG cutouts retain their supplied transparency.",
-    "Faces, hair, expressions, pose, and clothing are not generated again; only proportional scaling and positioning are applied to fit the brand.",
-    "Script and extra-prompt requests change the background, not the uploaded people's appearance.",
-    "Use the existing server OpenAI API key for planning and background generation; no separate reference-edit model setting is needed.",
-    "Install requirements.txt and keep bundled assets/u2netp.onnx for local masking. The existing OpenAI key is used for coverage checks and visual planning.",
-    "Review complete people, hair, and placement; a supplied transparent PNG gives direct control of the cutout."
+    "Upload one photo per person, up to four references; the next upload appears after each selection.",
+    "Every reference displays its original thumbnail and filename and can be replaced or removed before generation.",
+    "All selected references are supplied together in order to OpenAI visual planning and image edits; the same existing OPENAI_IMAGE_MODEL setting is used.",
+    "Each person's face, hair, and distinguishing features guide identity while the scene, pose, expression, and clothing can follow the script.",
+    "There are no local cutouts, pasted-photo layers, or intact-photo fallback. No additional key or model setting is required.",
+    "Reference controls are locked during a job, and the browser checks every returned thumbnail's reported reference count and edit strategy.",
+    "Exact likeness is not guaranteed by image generation; review all faces and hair before use.",
+    "Identical image content cannot be uploaded twice; different photos may share a filename."
   ],
   "security_notes": [
     "Do not share your personal OpenAI API key.",
@@ -48,9 +48,9 @@
     "Enter the title.",
     "Leverage Edu uses three headline lines, with the last highlighted turquoise; use MY JOURNEY TO | UNIVERSITY OF | SALFORD to choose the line breaks.",
     "Paste the script.",
-    "Optionally upload a photo to keep its original people, faces, hair, expressions, and clothing unchanged in a new background.",
+    "Optionally upload one separate reference photo per person, starting with Upload image 1 and continuing up to four people.",
     "Click Create Thumbnail.",
-    "Review all people, hair, and placement when a person photo was supplied; the completion message explains any intact-photo fallback.",
+    "Review every person's face, hair, and placement in the generated scene when references were supplied.",
     "Download the PNG when finished."
   ]
 }

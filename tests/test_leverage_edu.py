@@ -144,13 +144,13 @@ class LeverageEduTests(unittest.TestCase):
         )
         self.assertEqual(first.crop((188, 1066, 893, 1290)).tobytes(), second.crop((188, 1066, 893, 1290)).tobytes())
 
-    def test_leverage_focus_bounds_reach_planning_generation_and_reference_backgrounds(self):
+    def test_leverage_focus_bounds_reach_planning_generation_and_reference_edits(self):
         self.assertEqual(agent.client_focus_zone(self.config), {"x": 400, "y": 460, "w": 640, "h": 510})
         focus_prompt = agent.focus_zone_prompt(self.config)
         self.assertIn("from x=400 to 1040, y=460 to 970", focus_prompt)
         self.assertNotIn("top half", focus_prompt.lower())
         self.assertIn("face above y=460", agent.safe_zone_negative_prompt(self.config))
-        self.assertIn("x=400..1040, y=460..970", agent.person_reference_prompt(self.config))
+        self.assertIn("from x=400 to 1040, y=460 to 970", agent.person_reference_prompt(self.config))
         with mock.patch.object(agent, "openai_responses_create", return_value={"output_text": json.dumps(self.brief)}) as responses:
             agent.create_visual_brief(
                 "The student arrives at university.", "MY JOURNEY TO | UNIVERSITY OF | OXFORD", self.config,
@@ -161,7 +161,7 @@ class LeverageEduTests(unittest.TestCase):
         user_text = payload["input"][1]["content"][0]["text"]
         self.assertIn("x=400..1040", developer)
         self.assertIn("y=460..970", developer)
-        self.assertIn("x=400..1040, y=460..970", user_text)
+        self.assertIn("from x=400 to 1040, y=460 to 970", user_text)
         for prompt in (developer, user_text):
             self.assertIn("to the right of the Leverage Edu logo", prompt)
             self.assertNotIn("y=560", prompt)
@@ -171,18 +171,26 @@ class LeverageEduTests(unittest.TestCase):
         for with_reference in (False, True):
             with self.subTest(reference=with_reference):
                 with mock.patch.object(agent, "openai_images_generate", return_value=encoded.getvalue()) as generate, \
+                     mock.patch.object(agent, "openai_images_edit", return_value=encoded.getvalue()) as edit, \
                      mock.patch.object(agent, "openai_responses_create") as fallback:
                     agent.generate_subject_image(self.brief, self.config, self.subject if with_reference else None)
-                generate.assert_called_once()
                 fallback.assert_not_called()
-                prompt = generate.call_args.args[0]
+                if with_reference:
+                    generate.assert_not_called()
+                    edit.assert_called_once()
+                    prompt = edit.call_args.args[0]
+                else:
+                    generate.assert_called_once()
+                    edit.assert_not_called()
+                    prompt = generate.call_args.args[0]
                 self.assertIn("x=400..1040, y=460..970", prompt)
                 self.assertIn("to the right of the Leverage Edu logo", prompt)
                 self.assertNotIn("y=560", prompt)
                 self.assertNotIn("y=1220", prompt)
                 if with_reference:
-                    self.assertIn("BACKGROUND ONLY", prompt)
-                    self.assertIn("do not generate any people", prompt)
+                    self.assertNotIn("BACKGROUND ONLY", prompt)
+                    self.assertIn("face", prompt.lower())
+                    self.assertIn("hair", prompt.lower())
 
     def test_public_status_reports_the_bundled_leverage_assets_ready(self):
         status = agent.public_client_status(self.config)

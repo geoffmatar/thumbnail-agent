@@ -16,26 +16,22 @@ The other home-page cards are marked Coming soon.
 Normal flow:
 
 1. Choose an agent and enter your title.
-2. Paste the script; optionally add visual instructions and a person reference image.
-3. The agent creates the background from the script. If a photo is attached, its original people are composited into the thumbnail.
-4. The app layers the background, brand design, and optional photo, then draws the title in that brand's font.
+2. Paste the script; optionally add visual instructions and a separate reference photo for each person.
+3. The agent creates a natural scene from the script, using the uploaded people as identity references.
+4. The fixed brand design is composited over the scene, and the title is drawn in that brand's font.
 5. Review the result and download the PNG.
 
 Templates and title fonts are bundled with the app.
 
 ## Person Reference Images
 
-Upload a photo when the thumbnail should feature its original people. The app generates a background from the script, then composites a checked cutout made from the uploaded photo. The people use their source photo colors and detail; their faces, hair, expressions, pose, and clothing are not generated again.
+Upload one photo per person, up to four people. The studio starts with **Upload image 1** and reveals the next upload after each selection. Each reference shows its original thumbnail and filename, with Replace and Remove controls; click the thumbnail to enlarge it. References are remembered separately for each brand while the page stays open and are locked during that brand's generation.
 
-Background removal runs locally on the server using the bundled model. Before an automatic cutout is used, OpenAI checks the source photo and candidate mask for coverage of every person, including faces, heads, and hair. This check evaluates coverage and does not identify people. Transparent PNG cutouts keep their supplied transparency. The photo can also be sent to OpenAI for visual planning.
+All selected photos are supplied together, in order, to visual planning and the OpenAI Images edits request. Each person's face, hair, and distinguishing features guide their identity in the generated scene. The script and extra prompt can change the setting, pose, expression, and clothing so the people appear naturally in context. There is no local cutout, pasted-photo composition, or intact-photo fallback.
 
-If the people cannot be safely isolated or the coverage check is uncertain, the intact original photo is used, including its original background. The completion message explains this fallback. Review the result for complete people, hair, and placement; automatic masking can still require correction, and a supplied transparent PNG gives direct control of the cutout.
+The studio verifies that the server reports using every uploaded reference before showing a photo-based result. Exact likeness is not guaranteed by image generation; review all faces and hair before using the thumbnail. Uploading identical image content more than once is rejected; different photos may share a filename.
 
-The photo or cutout may be proportionally scaled and repositioned to fit the selected brand's image opening. The script and extra prompt control the generated background; requests to change the uploaded people's expression, hairstyle, pose, or clothes do not apply to those people.
-
-Photo selection is locked while that brand's thumbnail is being created. The studio hides a photo-based result if the server does not confirm original-photo composition.
-
-Background generation uses `OPENAI_IMAGE_MODEL`, whose default is `gpt-image-1`. `OPENAI_IMAGE_QUALITY` defaults to `medium`. The photo composition uses the existing OpenAI key for planning and background generation; no additional key or reference-edit model setting is needed.
+`OPENAI_IMAGE_MODEL` selects the model for both scene generation and reference-image edits and defaults to `gpt-image-1`. Edits use high input fidelity with `gpt-image-1` and `gpt-image-1.5`; `gpt-image-2` handles high input fidelity automatically. `OPENAI_IMAGE_QUALITY` defaults to `medium`. The existing server OpenAI key is used throughout; no additional key or reference-model setting is needed.
 
 ## Subject Placement
 
@@ -60,8 +56,6 @@ Install the dependencies and start the app:
 python3 -m pip install -r requirements.txt
 python3 thumbnail_agent.py serve
 ```
-
-Install all dependencies from `requirements.txt`; local background removal uses Pillow, NumPy, and ONNX Runtime with bundled `assets/u2netp.onnx`. No masking API key or runtime model download is needed.
 
 Open:
 
@@ -115,7 +109,7 @@ python3 thumbnail_agent.py render --script my-script.txt --title "THE KID WHO | 
 To use a person reference with a specific agent:
 
 ```bash
-python3 thumbnail_agent.py render --client alliance-latin --script my-script.txt --title "TITLE HERE" --person-reference person.png --extra-prompt "Set the background at a university campus."
+python3 thumbnail_agent.py render --client alliance-latin --script my-script.txt --title "TITLE HERE" --person-reference person.png --extra-prompt "Show this person arriving at a university campus, smiling in formal clothes."
 ```
 
 For local testing without using image generation:

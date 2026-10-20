@@ -19,17 +19,17 @@ OPENAI_IMAGE_QUALITY=medium
 
 Do not put `OPENAI_API_KEY` in the code or send it to teammates.
 
-The photo workflow uses the existing server key for planning and background generation. `OPENAI_IMAGE_MODEL` defaults to `gpt-image-1`, and `OPENAI_IMAGE_QUALITY` defaults to `medium`. No additional key or reference-edit model setting is needed.
+The reference workflow uses the existing server key for visual planning and scene generation. `OPENAI_IMAGE_MODEL` selects the same model for normal generation and reference-image edits and defaults to `gpt-image-1`. `OPENAI_IMAGE_QUALITY` defaults to `medium`. No additional key or reference-model setting is needed.
 
 ## Person Reference Workflow
 
-With a person photo attached, OpenAI generates the background scene. The server creates a local cutout using source photo colors and detail, then composites it into the selected brand template. Faces, hair, expressions, pose, and clothing are not generated again; only proportional scaling and positioning are applied to fit the image opening.
+Teammates can upload one separate photo per person, up to four references. Uploads appear progressively, with original previews, filenames, Replace, and Remove controls. Every selected photo is sent in order to OpenAI visual planning and the Images edits request. The model uses each person's face, hair, and distinguishing features as identity guidance while the scene, pose, expression, and clothing can follow the script. There is no cutout pipeline or pasted-photo fallback.
 
-Local background removal uses bundled `assets/u2netp.onnx`, NumPy, and ONNX Runtime. Install all dependencies from `requirements.txt` and keep the model in the deployment; no extra masking API key or runtime model download is needed. Before an automatic cutout is accepted, OpenAI checks the source photo and candidate mask for complete coverage of every person's face, head, hair, and body. This coverage check does not identify people and runs once before thumbnail variants are generated. The photo can also be sent to OpenAI for visual planning.
+Reference edits use high input fidelity for `gpt-image-1` and `gpt-image-1.5`; `gpt-image-2` handles high input fidelity automatically. Install the packages in `requirements.txt`; no segmentation model or masking runtime is required.
 
 The included `.python-version` selects Python 3.12 for native Render deployments, matching the Docker image.
 
-Transparent PNG cutouts retain their supplied transparency. If automatic isolation or the coverage check is uncertain, the intact original photo is used and the completion message explains why. Script and extra-prompt requests apply to the generated background. Teammates should review complete people, hair, and placement before using the thumbnail.
+The browser locks reference controls while that brand's job runs and checks the reported reference count and edit strategy before showing the result. Exact likeness is not guaranteed by image generation; teammates should review every face and hairstyle before use. Duplicate image content is rejected, while different photos with the same filename are valid.
 
 ## Recommended: Render
 

@@ -15,8 +15,8 @@ const titleInput = document.querySelector("#titleInput");
 const titleHelp = document.querySelector("#titleHelp");
 const scriptText = document.querySelector("#scriptText");
 const extraPrompt = document.querySelector("#extraPrompt");
-const personReference = document.querySelector("#personReference");
-const referenceFileName = document.querySelector("#referenceFileName");
+const referenceSlots = document.querySelector("#referenceSlots");
+const referenceStatus = document.querySelector("#referenceStatus");
 const resultsList = document.querySelector("#resultsList");
 const progressPanel = document.querySelector("#progressPanel");
 const progressLabel = document.querySelector("#progressLabel");
@@ -30,6 +30,7 @@ const closePreview = document.querySelector("#closePreview");
 
 let progressTimer = null;
 let currentClient = "zoomex";
+const MAX_PERSON_REFERENCES = 4;
 
 const clients = {
   zoomex: {
@@ -91,7 +92,7 @@ const clientStates = Object.fromEntries(
       title: "",
       script: "",
       extraPrompt: "",
-      personReferenceFile: null,
+      personReferences: [],
       progress: null,
       progressStartedAt: 0,
       running: false,
@@ -184,12 +185,118 @@ function setStatus(message, isError = false, clientSlug = currentClient) {
   renderStatus(clientSlug);
 }
 
-function renderReferenceState(clientSlug = currentClient) {
+function renderReferenceState(clientSlug = currentClient, focusIndex = null) {
   if (clientSlug !== currentClient) return;
   const state = getClientState(clientSlug);
-  referenceFileName.textContent = state.personReferenceFile
-    ? state.personReferenceFile.name
-    : "Upload reference image";
+  const slotCount = Math.min(MAX_PERSON_REFERENCES, state.personReferences.length + 1);
+  referenceSlots.replaceChildren();
+
+  for (let index = 0; index < slotCount; index += 1) {
+    const reference = state.personReferences[index];
+    const number = index + 1;
+    const slot = document.createElement("div");
+    slot.className = reference ? "reference-slot" : "reference-slot reference-slot-empty";
+
+    const upload = document.createElement("label");
+    upload.className = "reference-button reference-upload-control";
+    const input = document.createElement("input");
+    input.id = index === 0 ? "personReference" : `personReference${number}`;
+    input.name = index === 0 ? "person_reference" : `person_reference_${number}`;
+    input.type = "file";
+    input.accept = "image/*";
+    input.className = "reference-file-input";
+    input.disabled = state.running;
+    input.setAttribute("aria-label", `${reference ? "Replace" : "Upload"} image ${number}`);
+    input.setAttribute("aria-describedby", "referenceHelp");
+    input.addEventListener("change", () => {
+      const file = input.files?.[0];
+      if (file) setReferenceFile(clientSlug, index, file);
+    });
+    const uploadText = document.createElement("span");
+    uploadText.textContent = reference ? "Replace" : `Upload image ${number}`;
+    upload.appendChild(input);
+    upload.appendChild(uploadText);
+
+    if (reference) {
+      const previewButton = document.createElement("button");
+      previewButton.className = "reference-preview-button";
+      previewButton.type = "button";
+      previewButton.disabled = state.running;
+      previewButton.dataset.previewSrc = reference.previewUrl;
+      previewButton.dataset.previewAlt = `Original reference image ${number}: ${reference.file.name}`;
+      previewButton.setAttribute("aria-label", `Preview image ${number}`);
+      previewButton.addEventListener("click", () => openImagePreview(previewButton));
+      const preview = document.createElement("img");
+      preview.className = "reference-thumbnail";
+      preview.src = reference.previewUrl;
+      preview.alt = previewButton.dataset.previewAlt;
+      previewButton.appendChild(preview);
+      slot.appendChild(previewButton);
+
+      const details = document.createElement("div");
+      details.className = "reference-details";
+      const label = document.createElement("span");
+      label.className = "reference-number";
+      label.textContent = `Image ${number}`;
+      const filename = document.createElement("span");
+      filename.className = "reference-filename";
+      filename.textContent = reference.file.name;
+      filename.title = reference.file.name;
+      details.appendChild(label);
+      details.appendChild(filename);
+      slot.appendChild(details);
+
+      const actions = document.createElement("div");
+      actions.className = "reference-actions";
+      actions.appendChild(upload);
+      const remove = document.createElement("button");
+      remove.className = "reference-button reference-remove";
+      remove.type = "button";
+      remove.textContent = "Remove";
+      remove.disabled = state.running;
+      remove.setAttribute("aria-label", `Remove image ${number}`);
+      remove.addEventListener("click", () => removeReferenceFile(clientSlug, index));
+      actions.appendChild(remove);
+      slot.appendChild(actions);
+    } else {
+      slot.appendChild(upload);
+    }
+    referenceSlots.appendChild(slot);
+  }
+
+  const count = state.personReferences.length;
+  referenceStatus.textContent = `${count} reference image${count === 1 ? "" : "s"} added.`;
+  updateReferenceControlState();
+  if (focusIndex !== null && !state.running) {
+    referenceSlots.querySelectorAll("input")[focusIndex]?.focus({ preventScroll: true });
+  }
+}
+
+function setReferenceFile(clientSlug, index, file) {
+  const state = getClientState(clientSlug);
+  if (!state || state.running || index < 0 || index >= MAX_PERSON_REFERENCES || index > state.personReferences.length) return;
+  const previous = state.personReferences[index];
+  const previewUrl = URL.createObjectURL(file);
+  if (previous) URL.revokeObjectURL(previous.previewUrl);
+  state.personReferences[index] = { file, previewUrl };
+  const focusIndex = previous ? index : Math.min(index + 1, MAX_PERSON_REFERENCES - 1);
+  renderReferenceState(clientSlug, focusIndex);
+}
+
+function removeReferenceFile(clientSlug, index) {
+  const state = getClientState(clientSlug);
+  if (!state || state.running || index < 0 || index >= state.personReferences.length) return;
+  const [removed] = state.personReferences.splice(index, 1);
+  URL.revokeObjectURL(removed.previewUrl);
+  renderReferenceState(clientSlug, Math.min(index, state.personReferences.length));
+}
+
+function updateReferenceControlState() {
+  const running = Boolean(getClientState()?.running);
+  referenceSlots.classList.toggle("is-busy", running);
+  referenceSlots.querySelectorAll("input, button").forEach((control) => {
+    control.disabled = running;
+  });
 }
 
 function resultItems(result) {
@@ -198,17 +305,18 @@ function resultItems(result) {
   return [result];
 }
 
-function verifyOriginalPhotoResult(result) {
+function verifyReferenceResult(result, referenceCount) {
   const records = Array.isArray(result?.thumbnails) && result.thumbnails.length
     ? [result, ...result.thumbnails]
     : [result];
-  const originalPeopleConfirmed = records.every((item) => (
+  const referencesConfirmed = records.every((item) => (
     item?.person_reference_used === true
-    && item.reference_strategy === "source_photo_composite"
-    && item.reference_preservation === "original_pixels"
+    && item.person_reference_count === referenceCount
+    && item.reference_strategy === "multi_image_edit"
+    && item.reference_preservation === "identity_guided"
   ));
-  if (!originalPeopleConfirmed) {
-    throw new Error("Could not confirm the original uploaded people were preserved. This result is hidden. Refresh the app and try again.");
+  if (!referencesConfirmed) {
+    throw new Error("Could not confirm that all uploaded references were used. This result is hidden. Refresh the app and try again.");
   }
 }
 
@@ -366,7 +474,7 @@ function stopProgress() {
 function updateCreateButtonState() {
   const state = getClientState();
   createBtn.disabled = Boolean(state?.running);
-  personReference.disabled = Boolean(state?.running);
+  updateReferenceControlState();
 }
 
 function hydrateClientState(clientSlug) {
@@ -374,7 +482,6 @@ function hydrateClientState(clientSlug) {
   titleInput.value = state.title;
   scriptText.value = state.script;
   extraPrompt.value = state.extraPrompt;
-  personReference.value = "";
   renderReferenceState(clientSlug);
   renderResultState(clientSlug);
   renderProgress(clientSlug);
@@ -444,14 +551,6 @@ function previewThumbnailWithKeyboard(event) {
   openImagePreview(previewWrap);
 }
 
-function updateReferenceFileName() {
-  const state = getClientState();
-  if (state.running) return;
-  const file = personReference.files && personReference.files[0];
-  state.personReferenceFile = file || null;
-  renderReferenceState();
-}
-
 async function loadStatus(clientSlug = currentClient) {
   try {
     const status = await readJson(`/api/status?client=${encodeURIComponent(clientSlug)}`);
@@ -483,7 +582,7 @@ async function createThumbnail() {
   const jobClient = currentClient;
   const state = getClientState(jobClient);
   if (state.running) return;
-  const jobReferenceFile = state.personReferenceFile;
+  const jobReferenceFiles = state.personReferences.map((reference) => reference.file);
   const title = titleInput.value.trim();
   if (!title) {
     setStatus("Add the thumbnail title first.", true, jobClient);
@@ -506,9 +605,9 @@ async function createThumbnail() {
   if (extraPromptValue) {
     form.append("extra_prompt", extraPromptValue);
   }
-  if (jobReferenceFile) {
-    form.append("person_reference", jobReferenceFile);
-  }
+  jobReferenceFiles.forEach((file, index) => {
+    form.append(index === 0 ? "person_reference" : `person_reference_${index + 1}`, file);
+  });
 
   state.result = null;
   updateCreateButtonState();
@@ -523,7 +622,7 @@ async function createThumbnail() {
 
     const statusUrl = payload.status_url || `/api/jobs/${payload.job_id}`;
     const result = await waitForJob(statusUrl, jobClient);
-    if (jobReferenceFile) verifyOriginalPhotoResult(result);
+    if (jobReferenceFiles.length) verifyReferenceResult(result, jobReferenceFiles.length);
 
     state.result = result;
     state.resultVersion = Date.now();
@@ -532,14 +631,7 @@ async function createThumbnail() {
     const doneMessage = createdCount > 1
       ? `Done. Saved ${createdCount} new thumbnails.`
       : "Done. Saved as a new thumbnail.";
-    const referenceFallbackUsed = result.reference_composition?.fallback_used === true
-      || resultItems(result).some((item) => item.reference_composition?.fallback_used === true);
-    const completionMessage = result.used_ai ? doneMessage : "Done with local fallback.";
-    const statusMessage = referenceFallbackUsed
-      ? `${completionMessage} Original photo kept intact because the people could not be safely isolated.`
-      : completionMessage;
-    if (referenceFallbackUsed) updateProgress({ message: statusMessage }, jobClient);
-    setStatus(statusMessage, false, jobClient);
+    setStatus(result.used_ai ? doneMessage : "Done with local fallback.", false, jobClient);
   } catch (error) {
     updateProgress({
       status: "error",
@@ -574,7 +666,6 @@ scriptText.addEventListener("input", () => {
 extraPrompt.addEventListener("input", () => {
   getClientState().extraPrompt = extraPrompt.value;
 });
-personReference.addEventListener("change", updateReferenceFileName);
 resultsList.addEventListener("click", downloadThumbnail);
 resultsList.addEventListener("click", previewThumbnail);
 resultsList.addEventListener("keydown", previewThumbnailWithKeyboard);

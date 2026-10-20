@@ -693,7 +693,7 @@ body.siyata-mode #progressLabel {
 
 .control-panel {
   display: grid;
-  grid-template-rows: var(--form-top-height) minmax(300px, calc(var(--form-work-height) - 222px)) 96px 104px;
+  grid-template-rows: var(--form-top-height) minmax(300px, calc(var(--form-work-height) - 222px)) 96px auto;
   gap: 16px;
   padding: 18px;
 }
@@ -854,13 +854,102 @@ textarea {
 
 .reference-card {
   min-height: 104px;
-  height: 104px;
+  height: auto;
+  gap: 10px;
+}
+
+.reference-slots {
+  display: grid;
+  gap: 10px;
+}
+
+.reference-slot {
+  display: grid;
+  grid-template-columns: 80px minmax(0, 1fr);
+  grid-template-areas: "preview details" "preview actions";
+  align-items: center;
+  gap: 7px 12px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  min-width: 0;
+}
+
+.reference-slot-empty {
+  display: block;
+  padding: 0;
+  border: 0;
+}
+
+.reference-preview-button {
+  grid-area: preview;
+  width: 80px;
+  height: 96px;
+  min-height: 96px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.2);
+  cursor: zoom-in;
+}
+
+.reference-thumbnail {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.reference-preview-button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.reference-details {
+  grid-area: details;
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.reference-card .reference-number {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.reference-card .reference-filename {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reference-actions {
+  grid-area: actions;
+  display: flex;
+  flex-wrap: wrap;
   gap: 7px;
+}
+
+.reference-upload-control {
+  position: relative;
   cursor: pointer;
 }
 
-.reference-card input {
-  display: none;
+.reference-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
 
 .reference-button {
@@ -879,6 +968,28 @@ textarea {
   text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.reference-button span {
+  color: inherit;
+  font-weight: inherit;
+}
+
+.reference-actions .reference-button {
+  min-height: 34px;
+  padding: 0 10px;
+}
+
+.reference-upload-control:focus-within,
+.reference-remove:focus-visible,
+.reference-preview-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.reference-slots.is-busy .reference-button {
+  opacity: 0.6;
+  cursor: wait;
 }
 
 body.alliance-mode .reference-button {
@@ -905,8 +1016,7 @@ body.alliance-lgbtq-mode .reference-button {
   border-color: rgba(174, 91, 182, 0.26);
 }
 
-.reference-card:hover .reference-button,
-.reference-card:focus-within .reference-button {
+.reference-button:hover {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
@@ -1722,6 +1832,20 @@ body.leverage-edu-mode .secondary-btn {
 
   .reference-card {
     min-height: 104px;
+  }
+
+  .reference-actions .reference-button,
+  .reference-slot-empty .reference-button {
+    min-height: 72px;
+    font-size: 16px;
+  }
+
+  .reference-card .reference-number {
+    font-size: 16px;
+  }
+
+  .reference-card .reference-filename {
+    font-size: 14px;
   }
 
   textarea {

@@ -10,7 +10,7 @@
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
     <link rel="manifest" href="/site.webmanifest">
     <meta name="theme-color" content="#ffffff">
-    <link rel="stylesheet" href="/styles.css">
+    <link rel="stylesheet" href="/styles.css?v=20261020-multi-refs-1">
   </head>
   <body class="home-mode">
     <main id="homeView" class="home-shell">
@@ -205,12 +205,12 @@
               <textarea id="extraPrompt" rows="3" placeholder="Add any specific visual requests here..."></textarea>
             </div>
 
-            <label class="dropzone reference-card" for="personReference">
-              <span>Person Reference (Optional)</span>
-              <input id="personReference" type="file" accept="image/*">
-              <span id="referenceFileName" class="reference-button">Upload reference image</span>
-              <small>Uploaded people stay unchanged; the script creates a new background.</small>
-            </label>
+            <section class="dropzone reference-card" aria-labelledby="referenceTitle" aria-describedby="referenceHelp">
+              <span id="referenceTitle">People references (optional)</span>
+              <div id="referenceSlots" class="reference-slots"></div>
+              <small id="referenceHelp">One photo per person. Add up to 4 people; the script sets the scene.</small>
+              <p id="referenceStatus" class="sr-only" role="status" aria-live="polite"></p>
+            </section>
 
           </section>
 
@@ -242,6 +242,6 @@
       </div>
     </div>
 
-    <script src="/app.js?v=20261020-source-cutouts-2"></script>
+    <script src="/app.js?v=20261020-multi-refs-1"></script>
   </body>
 </html>
