@@ -44,6 +44,14 @@ class CameraFacingTests(unittest.TestCase):
         network = mock.patch.object(agent.urllib.request, "urlopen", side_effect=AssertionError("Unexpected network request in camera-facing offline tests"))
         self.network = network.start()
         self.addCleanup(network.stop)
+        # Camera tests exercise orientation only. Synthetic source colors use a
+        # separate passing edit-feature fixture, tested in its own module.
+        appearance = mock.patch.object(agent, "validate_reference_appearance", side_effect=lambda image_path, reference_paths: {
+            "references": [{"reference_index": index, **{flag: True for flag in agent.REFERENCE_APPEARANCE_FLAGS}, "notes": "Offline feature fixture."} for index in range(1, len(reference_paths) + 1)],
+            "notes": "Synthetic images; feature review is tested separately.",
+        })
+        appearance.start()
+        self.addCleanup(appearance.stop)
         self.references = []
         for index, color in enumerate(("#ce3153", "#22b867")):
             path = self.root / f"person-{index}.png"

@@ -24,24 +24,31 @@
   "environment_variables": {
     "OPENAI_API_KEY": "add_their_own_openai_key_here",
     "OPENAI_MODEL": "gpt-5.5",
-    "OPENAI_IMAGE_MODEL": "gpt-image-1",
-    "OPENAI_IMAGE_QUALITY": "medium"
+    "OPENAI_IMAGE_MODEL": "gpt-image-2.5-sunburst-2026-09-08",
+    "OPENAI_IMAGE_QUALITY": "medium",
+    "OPENAI_PERSON_IMAGE_MODEL": "gpt-image-2.5-sunburst-2026-09-08",
+    "OPENAI_PERSON_IMAGE_QUALITY": "high",
+    "OPENAI_PERSON_REVIEW_MODEL": "gpt-6-astra"
   },
   "composition_rules": [
     "Every brand prompts all featured people with front-facing heads, visible eyes, and direct eye contact with the camera, with or without reference photos.",
     "Script and extra-prompt instructions may change the scene and body pose but cannot override head or gaze direction.",
-    "Every final rendered option is checked for gaze and visibility without identity recognition; a gaze or visibility failure permits one regeneration from the original references when supplied.",
-    "Unavailable or malformed verification stops creation, and the browser hides any result without confirmed checks for all options.",
+    "Every final rendered option is checked for gaze and visibility; reference-based results also receive a visible-feature appearance review after the gaze check passes.",
+    "Gaze and appearance failures share one retry, allowing at most two generation attempts per thumbnail from the original references when supplied.",
+    "Unavailable or malformed checks stop creation without another generation, and the browser hides results without successful required checks for all options.",
     "CLI --subject-image requires configured OpenAI for one final camera-facing check of the supplied scene."
   ],
   "person_reference_notes": [
     "Upload one photo per person, up to four references; the next upload appears after each selection.",
     "Every reference displays its original thumbnail and filename and can be replaced or removed before generation.",
-    "All selected references are supplied together in order to OpenAI visual planning and image edits; the same existing OPENAI_IMAGE_MODEL setting is used.",
+    "All selected references are supplied together in order to OpenAI visual planning and image edits. The edits use OPENAI_PERSON_IMAGE_MODEL (default gpt-image-2.5-sunburst-2026-09-08) and OPENAI_PERSON_IMAGE_QUALITY (default high).",
     "Each person's facial proportions, hair, and distinguishing features guide identity while the scene, body pose, expression, and clothing can follow the script; heads and eyes stay directed toward the camera.",
-    "There are no local cutouts, pasted-photo layers, or intact-photo fallback. No additional key or model setting is required.",
-    "Reference controls are locked during a job, and the browser checks every returned thumbnail's reported reference count and edit strategy.",
-    "Exact likeness is not guaranteed by image generation; review all faces and hair before use.",
+    "There are no local cutouts, pasted-photo layers, or intact-photo fallback. The existing server OpenAI key is used throughout; no additional API key is required.",
+    "Scenes without references use OPENAI_IMAGE_MODEL (default gpt-image-2.5-sunburst-2026-09-08) and OPENAI_IMAGE_QUALITY (default medium); existing general-model overrides do not change the independent person-reference defaults.",
+    "GPT Image 2-family models generate a 1152x2048 scene in a 9:16 aspect ratio; the branded PNG remains 1080x1920. High-quality reference edits and the dedicated appearance-review call may increase API cost and generation time.",
+    "Reference controls are locked during a job, and the browser requires the reported reference count, edit strategy, and successful appearance review for the overall result and every returned thumbnail.",
+    "The appearance review uses OPENAI_PERSON_REVIEW_MODEL (default gpt-6-astra), independently of the visual-planning and gaze model OPENAI_MODEL. It compares each reference against the final thumbnail for visible face shape, eyes and brows, nose and mouth, hair, glasses, and sufficient clarity; optional jewelry may change.",
+    "The appearance review assesses edit quality without identifying anyone or proving an exact identity match. It can miss changes, and exact likeness is not guaranteed by image generation; review all faces and hair before use.",
     "Identical image content cannot be uploaded twice; different photos may share a filename."
   ],
   "security_notes": [

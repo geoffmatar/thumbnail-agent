@@ -10,3 +10,13 @@ services:
         sync: false
       - key: OPENAI_MODEL
         value: gpt-5.5
+      - key: OPENAI_IMAGE_MODEL
+        value: gpt-image-2.5-sunburst-2026-09-08
+      - key: OPENAI_IMAGE_QUALITY
+        value: medium
+      - key: OPENAI_PERSON_IMAGE_MODEL
+        value: gpt-image-2.5-sunburst-2026-09-08
+      - key: OPENAI_PERSON_IMAGE_QUALITY
+        value: high
+      - key: OPENAI_PERSON_REVIEW_MODEL
+        value: gpt-6-astra

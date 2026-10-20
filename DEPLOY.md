@@ -13,27 +13,34 @@ Set these environment variables in your hosting provider:
 ```bash
 OPENAI_API_KEY=sk-...
 OPENAI_MODEL=gpt-5.5
-OPENAI_IMAGE_MODEL=gpt-image-1
+OPENAI_IMAGE_MODEL=gpt-image-2.5-sunburst-2026-09-08
 OPENAI_IMAGE_QUALITY=medium
+OPENAI_PERSON_IMAGE_MODEL=gpt-image-2.5-sunburst-2026-09-08
+OPENAI_PERSON_IMAGE_QUALITY=high
+OPENAI_PERSON_REVIEW_MODEL=gpt-6-astra
 ```
 
 Do not put `OPENAI_API_KEY` in the code or send it to teammates.
 
-The reference workflow uses the existing server key for visual planning and scene generation. `OPENAI_IMAGE_MODEL` selects the same model for normal generation and reference-image edits and defaults to `gpt-image-1`. `OPENAI_IMAGE_QUALITY` defaults to `medium`. No additional key or reference-model setting is needed.
+All planning, image generation, and checks use the existing server key. Scenes without person references use `OPENAI_IMAGE_MODEL` (default `gpt-image-2.5-sunburst-2026-09-08`) and `OPENAI_IMAGE_QUALITY` (default `medium`). Reference-image edits use independent settings: `OPENAI_PERSON_IMAGE_MODEL` defaults to the same pinned Sunburst model and `OPENAI_PERSON_IMAGE_QUALITY` defaults to `high`. Existing general-model overrides remain supported and do not change the reference defaults. No additional API key is needed.
+
+High-quality reference edits and the dedicated appearance-review call may increase generation time and API cost. GPT Image 2-family models request a 1152×2048 scene, matching the final 9:16 composition; the downloadable branded PNG remains 1080×1920.
 
 Across every brand, with or without reference photos, the prompts require front-facing heads, visible eyes, and direct camera eye contact for all featured people. Script and extra-prompt directions cannot override head or gaze direction.
 
-The server audits each final rendered thumbnail for gaze and face visibility, without identity recognition. A gaze or visibility failure permits one regeneration from the original references when supplied. Missing, malformed, or unavailable verification stops the job; the browser also requires a confirmed check for every returned option. The CLI `--subject-image` path still requires configured OpenAI for this check and validates the supplied image once.
+The server audits each final rendered thumbnail for gaze and face visibility. When references are supplied, a passing gaze check is followed by the visible-feature review described below. Gaze and appearance failures share one retry: at most two generation attempts per thumbnail, always reusing the original references when supplied. Missing, malformed, or unavailable checks stop the job without another generation. The browser requires successful checks for every returned option. The CLI `--subject-image` path still requires configured OpenAI for its final camera-facing check and validates the supplied image once.
 
 ## Person Reference Workflow
 
 Teammates can upload one separate photo per person, up to four references. Uploads appear progressively, with original previews, filenames, Replace, and Remove controls. Every selected photo is sent in order to OpenAI visual planning and the Images edits request. The model uses each person's facial proportions, hair, and distinguishing features as identity guidance while the scene, body pose, expression, and clothing can follow the script. Heads and eyes remain directed toward the camera. There is no cutout pipeline or pasted-photo fallback.
 
-Reference edits use high input fidelity for `gpt-image-1` and `gpt-image-1.5`; `gpt-image-2` handles high input fidelity automatically. Install the packages in `requirements.txt`; no segmentation model or masking runtime is required.
+If the person-image model is explicitly overridden to `gpt-image-1` or `gpt-image-1.5`, reference edits use high input fidelity; 2-family models handle high input fidelity automatically. Install the packages in `requirements.txt`; no segmentation model or masking runtime is required.
 
 The included `.python-version` selects Python 3.12 for native Render deployments, matching the Docker image.
 
-The browser locks reference controls while that brand's job runs and checks the reported reference count and edit strategy before showing the result. Exact likeness is not guaranteed by image generation; teammates should review every face and hairstyle before use. Duplicate image content is rejected, while different photos with the same filename are valid.
+The appearance review uses `OPENAI_PERSON_REVIEW_MODEL` (default `gpt-6-astra`), independently of `OPENAI_MODEL` for visual planning and gaze checks. It compares each original reference against the final thumbnail for face shape, eyes and brows, nose and mouth, hair, glasses, and sufficient clarity. Optional jewelry may change. All required visible-feature checks must pass for every reference. This reviews edit quality without identifying anyone or proving an exact identity match; it can miss changes. Exact likeness is not guaranteed by image generation, so teammates should review every face and hairstyle before use.
+
+The browser locks reference controls while that brand's job runs and requires the reported reference count, edit strategy, and checked/passed appearance status for the overall result and every option before display. Duplicate image content is rejected, while different photos with the same filename are valid.
 
 ## Recommended: Render
 

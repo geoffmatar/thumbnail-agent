@@ -327,6 +327,12 @@ function verifyReferenceResult(result, referenceCount) {
   if (!referencesConfirmed) {
     throw new Error("Could not confirm that all uploaded references were used. This result is hidden. Refresh the app and try again.");
   }
+  if (!records.every((item) => (
+    item?.reference_appearance_checked === true
+    && item.reference_appearance_passed === true
+  ))) {
+    throw new Error("Could not confirm the face and hair checks for every result. This result is hidden. Please try again.");
+  }
 }
 
 function createResultCard(item, index, state, client) {

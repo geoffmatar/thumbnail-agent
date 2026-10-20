@@ -22,6 +22,8 @@ with mock.patch.dict(os.environ, {"OPENAI_API_KEY": "offline-test-key"}, clear=T
      mock.patch.object(Path, "read_text", return_value=""):
     import thumbnail_agent as agent
 
+SUNBURST_MODEL = "gpt-image-2.5-sunburst-2026-09-08"
+
 
 def image_bytes(size=(512, 768), color="#355d83"):
     output = io.BytesIO()
@@ -68,7 +70,13 @@ class PersonReferenceTests(unittest.TestCase):
             "negative_prompt": "text, watermarks",
             "rationale": "A natural scene matching the student's university journey.",
         }
-        environment = mock.patch.dict(os.environ, {"OPENAI_API_KEY": "offline-test-key"}, clear=True)
+        environment = mock.patch.dict(os.environ, {
+            "OPENAI_API_KEY": "offline-test-key",
+            # Legacy transport cases opt in explicitly; production person edits
+            # now default independently to Sunburst and high output quality.
+            "OPENAI_PERSON_IMAGE_MODEL": "gpt-image-1",
+            "OPENAI_PERSON_IMAGE_QUALITY": "medium",
+        }, clear=True)
         environment.start()
         self.addCleanup(environment.stop)
         paths = mock.patch.multiple(agent, ASSETS_DIR=self.root / "assets", STATE_DIR=self.root / "state", GENERATED_DIR=self.root / "generated", WORK_DIR=self.root / "work")
@@ -87,23 +95,38 @@ class PersonReferenceTests(unittest.TestCase):
         })
         gaze.start()
         self.addCleanup(gaze.stop)
+        appearance = mock.patch.object(agent, "validate_reference_appearance", side_effect=lambda image_path, reference_paths: {
+            "references": [{"reference_index": index, **{flag: True for flag in agent.REFERENCE_APPEARANCE_FLAGS}, "notes": "Offline feature fixture."} for index in range(1, len(reference_paths) + 1)],
+            "notes": "Synthetic images; feature review is tested separately.",
+        })
+        appearance.start()
+        self.addCleanup(appearance.stop)
 
     def assert_reference_metadata(self, result, count):
         self.assertIs(result["camera_facing_verified"], True)
         self.assertIs(result["camera_facing_check"]["all_eyes_on_camera"], True)
         self.assertIs(result["person_reference_used"], count > 0)
         self.assertEqual(result["person_reference_count"], count)
+        self.assertIs(result["reference_appearance_checked"], count > 0)
+        self.assertIs(result["reference_appearance_passed"], True if count else None)
+        self.assertEqual(result["reference_appearance_review_model"], "gpt-6-astra" if count else None)
+        if count:
+            self.assertEqual(len(result["reference_appearance_check"]["references"]), count)
+        else:
+            self.assertIsNone(result["reference_appearance_check"])
         if count:
             self.assertEqual(result["reference_strategy"], "multi_image_edit")
             self.assertEqual(result["reference_preservation"], "identity_guided")
             self.assertEqual(result["reference_image_model"], "gpt-image-1")
             self.assertEqual(result["reference_input_fidelity"], "high")
             self.assertEqual(result["reference_input_fidelity_parameter"], "high")
+            self.assertEqual(result["reference_image_quality"], "medium")
+            self.assertEqual(result["reference_image_size"], "1024x1536")
         else:
             self.assertIsNone(result["reference_strategy"])
             self.assertIsNone(result["reference_preservation"])
 
-    def edit_parts(self, request, expected_references):
+    def edit_parts(self, request, expected_references, model="gpt-image-1", quality="medium", size="1024x1536", input_fidelity="high"):
         self.assertEqual(request.full_url, agent.OPENAI_IMAGES_EDIT_ENDPOINT)
         self.assertEqual(request.get_method(), "POST")
         self.assertEqual(request.get_header("Authorization"), "Bearer offline-test-key")
@@ -113,13 +136,16 @@ class PersonReferenceTests(unittest.TestCase):
         self.assertEqual([part.get_payload(decode=True) for part in files], [path.read_bytes() for path in expected_references])
         self.assertTrue(all(part.get_filename() for part in files))
         fields = {part.get_param("name", header="content-disposition"): part.get_payload(decode=True).decode() for part in parts if part.get_filename() is None}
-        self.assertEqual(fields["model"], "gpt-image-1")
-        self.assertEqual(fields["input_fidelity"], "high")
-        self.assertEqual(fields["size"], "1024x1536")
-        self.assertEqual(fields["quality"], "medium")
+        self.assertEqual(fields["model"], model)
+        if input_fidelity is None:
+            self.assertNotIn("input_fidelity", fields)
+        else:
+            self.assertEqual(fields["input_fidelity"], input_fidelity)
+        self.assertEqual(fields["size"], size)
+        self.assertEqual(fields["quality"], quality)
         return fields
 
-    def mocked_openai(self, expected_references):
+    def mocked_openai(self, expected_references, **settings):
         def respond(request, timeout=None):
             if request.full_url == agent.OPENAI_ENDPOINT:
                 payload = json.loads(request.data)
@@ -127,7 +153,7 @@ class PersonReferenceTests(unittest.TestCase):
                 images = [part for part in payload["input"][1]["content"] if part["type"] == "input_image"]
                 self.assertEqual([base64.b64decode(image["image_url"].split(",", 1)[1]) for image in images], [path.read_bytes() for path in expected_references])
                 return json_response({"output_text": json.dumps(self.brief)})
-            self.edit_parts(request, expected_references)
+            self.edit_parts(request, expected_references, **settings)
             return json_response({"data": [{"b64_json": base64.b64encode(self.generated_bytes).decode()}]})
         return respond
 
@@ -149,13 +175,14 @@ class PersonReferenceTests(unittest.TestCase):
             agent.openai_images_edit("A university scene.", self.references[:2])
         self.network.assert_not_called()
 
-    def test_reference_fidelity_uses_the_configured_model_without_an_override(self):
+    def test_reference_fidelity_follows_the_dedicated_person_model(self):
+        os.environ["OPENAI_IMAGE_MODEL"] = "gpt-image-1-mini"
         os.environ["OPENAI_REFERENCE_IMAGE_MODEL"] = "gpt-image-1-mini"
         self.network.side_effect = None
         self.network.return_value = json_response({"data": [{"b64_json": base64.b64encode(self.generated_bytes).decode()}]})
-        for model, fidelity in (("gpt-image-1", "high"), ("gpt-image-1.5", "high"), ("gpt-image-2", None)):
+        for model, fidelity in (("gpt-image-1", "high"), ("gpt-image-1.5", "high"), ("gpt-image-2", None), (SUNBURST_MODEL, None)):
             with self.subTest(model=model):
-                os.environ["OPENAI_IMAGE_MODEL"] = model
+                os.environ["OPENAI_PERSON_IMAGE_MODEL"] = model
                 agent.openai_images_edit("A university scene.", self.references[:2])
                 fields = {part.get_param("name", header="content-disposition"): part.get_payload(decode=True).decode() for part in multipart_parts(self.network.call_args.args[0]) if part.get_filename() is None}
                 self.assertEqual(fields["model"], model)
@@ -164,10 +191,69 @@ class PersonReferenceTests(unittest.TestCase):
                 else:
                     self.assertNotIn("input_fidelity", fields)
         self.network.reset_mock()
-        os.environ["OPENAI_IMAGE_MODEL"] = "gpt-image-1-mini"
+        os.environ["OPENAI_PERSON_IMAGE_MODEL"] = "gpt-image-1-mini"
         with self.assertRaises(RuntimeError):
             agent.openai_images_edit("A university scene.", self.references[:2])
         self.network.assert_not_called()
+
+    def test_default_person_request_uses_sunburst_high_and_exact_portrait_ratio_despite_legacy_general_settings(self):
+        os.environ.pop("OPENAI_PERSON_IMAGE_MODEL")
+        os.environ.pop("OPENAI_PERSON_IMAGE_QUALITY")
+        os.environ["OPENAI_IMAGE_MODEL"] = "gpt-image-1"
+        os.environ["OPENAI_IMAGE_QUALITY"] = "low"
+        self.network.side_effect = None
+        self.network.return_value = json_response({"data": [{"b64_json": base64.b64encode(self.generated_bytes).decode()}]})
+        self.assertEqual(agent.openai_images_edit("A natural university scene.", self.references[:2]), self.generated_bytes)
+        self.network.assert_called_once()
+        self.edit_parts(self.network.call_args.args[0], self.references[:2], model=SUNBURST_MODEL, quality="high", size="1152x2048", input_fidelity=None)
+        self.assertEqual(agent.openai_image_model(), "gpt-image-1")
+        self.assertEqual(agent.openai_image_quality(), "low")
+
+    def test_blank_person_settings_use_the_supported_defaults(self):
+        os.environ["OPENAI_PERSON_IMAGE_MODEL"] = "  "
+        os.environ["OPENAI_PERSON_IMAGE_QUALITY"] = "  "
+        self.assertEqual(agent.openai_person_image_model(), SUNBURST_MODEL)
+        self.assertEqual(agent.openai_person_image_quality(), "high")
+        self.assertIsNone(agent.reference_input_fidelity_parameter())
+        os.environ["OPENAI_PERSON_IMAGE_MODEL"] = "  gpt-image-1.5  "
+        os.environ["OPENAI_PERSON_IMAGE_QUALITY"] = " high "
+        self.assertEqual(agent.openai_person_image_model(), "gpt-image-1.5")
+        self.assertEqual(agent.openai_person_image_quality(), "high")
+        self.assertEqual(agent.reference_input_fidelity_parameter(), "high")
+        self.network.assert_not_called()
+
+    def test_normal_generation_defaults_to_sunburst_medium_with_explicit_supported_dimensions(self):
+        self.network.side_effect = None
+        self.network.return_value = json_response({"data": [{"b64_json": base64.b64encode(self.generated_bytes).decode()}]})
+        self.assertEqual(agent.openai_images_generate("A university campus."), self.generated_bytes)
+        payload = json.loads(self.network.call_args.args[0].data)
+        self.assertEqual(payload["model"], SUNBURST_MODEL)
+        self.assertEqual(payload["quality"], "medium")
+        self.assertEqual(payload["size"], "1152x2048")
+        self.assertNotIn("input_fidelity", payload)
+
+    def test_default_person_settings_reach_every_variant_and_saved_metadata(self):
+        os.environ.pop("OPENAI_PERSON_IMAGE_MODEL")
+        os.environ.pop("OPENAI_PERSON_IMAGE_QUALITY")
+        os.environ["OPENAI_IMAGE_MODEL"] = "gpt-image-1"
+        self.generated_bytes = image_bytes((1152, 2048))
+        self.network.side_effect = self.mocked_openai(self.references[:2], model=SUNBURST_MODEL, quality="high", size="1152x2048", input_fidelity=None)
+        result = agent.handle_create("The students celebrate arriving at university.", "MY JOURNEY | BEGINS", client_slug="zoomex", person_reference_paths=self.references[:2])
+        self.assertEqual(len(result["thumbnails"]), 2)
+        for item in [result, *result["thumbnails"]]:
+            self.assertEqual(item["reference_image_model"], SUNBURST_MODEL)
+            self.assertEqual(item["reference_image_quality"], "high")
+            self.assertEqual(item["reference_image_size"], "1152x2048")
+            self.assertEqual(item["reference_input_fidelity"], "high")
+            self.assertIsNone(item["reference_input_fidelity_parameter"])
+        for item in result["thumbnails"]:
+            output = Path(item["thumbnail"])
+            metadata = json.loads(output.with_suffix(".json").read_text())
+            self.assertEqual(metadata["reference_image_model"], SUNBURST_MODEL)
+            self.assertEqual(metadata["reference_image_size"], "1152x2048")
+            self.assertEqual(metadata["reference_image_quality"], "high")
+            with Image.open(output) as rendered:
+                self.assertEqual(rendered.size, (1080, 1920))
 
     def test_reference_preflight_rejects_every_invalid_photo_before_any_api_call(self):
         empty = self.root / "empty.png"
@@ -358,6 +444,21 @@ class PersonReferenceTests(unittest.TestCase):
         self.assertEqual(output.read_bytes(), self.generated_bytes)
         edit.assert_not_called()
 
+    def test_normal_responses_fallback_explicitly_uses_its_own_model_quality_and_size(self):
+        response = {"output": [{"type": "image_generation_call", "result": base64.b64encode(self.generated_bytes).decode()}]}
+        for model, quality, size in (("gpt-image-1.5", "high", "1024x1536"), (SUNBURST_MODEL, "xhigh", "1152x2048")):
+            with self.subTest(model=model):
+                os.environ["OPENAI_IMAGE_MODEL"] = model
+                os.environ["OPENAI_IMAGE_QUALITY"] = quality
+                with mock.patch.object(agent, "openai_images_generate", side_effect=RuntimeError("temporary image service failure")), mock.patch.object(agent, "openai_responses_create", return_value=response) as create:
+                    output = agent.generate_subject_image(self.brief, agent.CLIENTS["alliance-latin"])
+                self.assertEqual(output.read_bytes(), self.generated_bytes)
+                tool = create.call_args.args[0]["tools"][0]
+                self.assertEqual(tool["type"], "image_generation")
+                self.assertEqual(tool["model"], model)
+                self.assertEqual(tool["quality"], quality)
+                self.assertEqual(tool["size"], size)
+
     def test_no_reference_creation_reports_zero_people_and_keeps_normal_generation(self):
         with mock.patch.object(agent, "create_visual_brief", return_value=self.brief), mock.patch.object(agent, "openai_images_generate", return_value=self.generated_bytes) as generate, mock.patch.object(agent, "openai_images_edit") as edit:
             result = agent.handle_create("University journey.", "MY JOURNEY | BEGINS", client_slug="alliance-latin", person_reference_paths=[])
@@ -478,7 +579,12 @@ class PersonReferenceTests(unittest.TestCase):
                 self.assertEqual(status, 200)
                 readiness = json.loads(payload)
                 self.assertIs(readiness["camera_facing_required"], True)
-                self.assertEqual(readiness["reference_workflow_version"], 5)
+                self.assertIs(readiness["reference_appearance_check_required"], True)
+                self.assertEqual(readiness["reference_workflow_version"], 6)
+                self.assertEqual(readiness["person_image_model"], "gpt-image-1")
+                self.assertEqual(readiness["person_image_quality"], "medium")
+                self.assertEqual(readiness["person_image_size"], "1024x1536")
+                self.assertEqual(readiness["person_review_model"], "gpt-6-astra")
                 status, _, payload = request("POST", "/api/create", bytes(body), {"Content-Type": f"multipart/form-data; boundary={boundary}"})
                 self.assertEqual(status, 202, payload)
                 status_url = json.loads(payload)["status_url"]

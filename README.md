@@ -25,7 +25,7 @@ Templates and title fonts are bundled with the app.
 
 Every brand prompts featured people with front-facing heads, visible eyes, and direct eye contact with the camera, with or without reference photos. Script and extra-prompt instructions cannot override this direction.
 
-The final rendered thumbnail receives a vision check for face direction and visibility, without identity recognition. A gaze or visibility failure allows one regeneration, reusing the original references when supplied. An unavailable or malformed check stops creation; the studio shows only results whose checks are confirmed for every option.
+The final rendered thumbnail receives a vision check for face direction and visibility. With reference photos, it also receives the appearance review described below. A failed gaze or appearance review permits one shared retry, with at most two generation attempts per thumbnail, reusing the original references when supplied. An unavailable or malformed check stops creation; the studio shows only results whose required checks pass for every option.
 
 ## Person Reference Images
 
@@ -33,9 +33,13 @@ Upload one photo per person, up to four people. The studio starts with **Upload 
 
 All selected photos are supplied together, in order, to visual planning and the OpenAI Images edits request. Each person's facial proportions, hair, and distinguishing features guide their identity in the generated scene. The script and extra prompt can change the setting, body pose, expression, and clothing while heads and eyes remain directed toward the camera. There is no local cutout, pasted-photo composition, or intact-photo fallback.
 
-The studio verifies that the server reports using every uploaded reference before showing a photo-based result. Exact likeness is not guaranteed by image generation; review all faces and hair before using the thumbnail. Uploading identical image content more than once is rejected; different photos may share a filename.
+After the camera-facing check passes, an appearance review compares each reference photo with the final rendered thumbnail for visible face shape, eyes and brows, nose and mouth, hair, glasses, and sufficient clarity. It uses `OPENAI_PERSON_REVIEW_MODEL`, defaulting to `gpt-6-astra`, independently of the `OPENAI_MODEL` used for visual planning and gaze checks. Optional jewelry may change. This is a review of visible edit quality, without identifying anyone or proving an exact identity match. The check can miss changes, and exact likeness is not guaranteed by image generation; review all faces and hair before using the thumbnail.
 
-`OPENAI_IMAGE_MODEL` selects the model for both scene generation and reference-image edits and defaults to `gpt-image-1`. Edits use high input fidelity with `gpt-image-1` and `gpt-image-1.5`; `gpt-image-2` handles high input fidelity automatically. `OPENAI_IMAGE_QUALITY` defaults to `medium`. The existing server OpenAI key is used throughout; no additional key or reference-model setting is needed.
+The studio checks the server's reported reference count, edit strategy, and successful appearance review for every option before showing a photo-based result. Uploading identical image content more than once is rejected; different photos may share a filename.
+
+Scenes without person references use `OPENAI_IMAGE_MODEL`, which defaults to the pinned `gpt-image-2.5-sunburst-2026-09-08` model, and `OPENAI_IMAGE_QUALITY`, which defaults to `medium`. Person-reference edits use the independent `OPENAI_PERSON_IMAGE_MODEL` setting, defaulting to the same pinned model, and `OPENAI_PERSON_IMAGE_QUALITY`, defaulting to `high`. An existing override of the general image model does not change the person-reference defaults. All requests use the existing server OpenAI key.
+
+GPT Image 2-family models generate a 1152×2048 scene in the final thumbnail's 9:16 aspect ratio; the branded output remains 1080×1920. High-quality reference edits and the dedicated appearance-review call may increase generation time and API cost. Legacy `gpt-image-1` and `gpt-image-1.5` overrides use high input fidelity for reference edits; 2-family models handle it automatically.
 
 ## Subject Placement
 
@@ -50,8 +54,11 @@ Put your OpenAI API key in `.env` for local use:
 ```bash
 OPENAI_API_KEY="your_api_key_here"
 OPENAI_MODEL="gpt-5.5"
-OPENAI_IMAGE_MODEL="gpt-image-1"
+OPENAI_IMAGE_MODEL="gpt-image-2.5-sunburst-2026-09-08"
 OPENAI_IMAGE_QUALITY="medium"
+OPENAI_PERSON_IMAGE_MODEL="gpt-image-2.5-sunburst-2026-09-08"
+OPENAI_PERSON_IMAGE_QUALITY="high"
+OPENAI_PERSON_REVIEW_MODEL="gpt-6-astra"
 ```
 
 Install the dependencies and start the app:
@@ -74,8 +81,11 @@ For internal company use, host this folder as a private web app and set these se
 ```bash
 OPENAI_API_KEY="your_server_key"
 OPENAI_MODEL="gpt-5.5"
-OPENAI_IMAGE_MODEL="gpt-image-1"
+OPENAI_IMAGE_MODEL="gpt-image-2.5-sunburst-2026-09-08"
 OPENAI_IMAGE_QUALITY="medium"
+OPENAI_PERSON_IMAGE_MODEL="gpt-image-2.5-sunburst-2026-09-08"
+OPENAI_PERSON_IMAGE_QUALITY="high"
+OPENAI_PERSON_REVIEW_MODEL="gpt-6-astra"
 ```
 
 The hosted link opens directly for teammates. Anyone with the hosted link can use it.
