@@ -97,6 +97,7 @@ CLIENTS = {
         "design_label": "ZOOMEX design ready",
         "logo_area": "top-left ZOOMEX logo area",
         "template_context": "fixed transparent ZOOMEX design layer",
+        "reference_focus_zone": {"x": 40, "y": 530, "w": 1000, "h": 700},
         "title_bands": [
             {**TOP_BAND, "fill": (0, 0, 0, 245), "text_fill": "#12d8c3", "font_max": 84, "font_min": 38},
             {**BOTTOM_BAND, "fill": (18, 216, 195, 255), "text_fill": "#030303", "font_max": 92, "font_min": 38},
@@ -112,6 +113,7 @@ CLIENTS = {
         "design_label": "Alliance design ready",
         "logo_area": "top-center Alliance Latin Community logo area",
         "template_context": "fixed Alliance Latin Community design layer with blue and orange title bars",
+        "reference_focus_zone": {"x": 40, "y": 330, "w": 1000, "h": 910},
         "title_bands": [
             {"x": 38, "y": 1256, "w": 1042, "h": 108, "radius": 58, "fill": (0, 124, 190, 255), "text_fill": "#ffffff", "font_max": 74, "font_min": 34, "text_center_x": 540},
             {"x": -10, "y": 1376, "w": 1052, "h": 108, "radius": 58, "fill": (247, 87, 30, 255), "text_fill": "#ffffff", "font_max": 74, "font_min": 34, "text_center_x": 540},
@@ -127,6 +129,7 @@ CLIENTS = {
         "design_label": "Alliance Black design ready",
         "logo_area": "top-center Alliance Black Community logo area",
         "template_context": "fixed Alliance Black Community design layer with espresso and copper title bars",
+        "reference_focus_zone": {"x": 40, "y": 330, "w": 1000, "h": 910},
         "title_bands": [
             {"x": 38, "y": 1256, "w": 1042, "h": 108, "radius": 58, "fill": (43, 35, 34, 255), "text_fill": "#ffffff", "font_max": 74, "font_min": 34, "text_center_x": 540},
             {"x": -10, "y": 1376, "w": 1052, "h": 108, "radius": 58, "fill": (177, 98, 54, 255), "text_fill": "#ffffff", "font_max": 74, "font_min": 34, "text_center_x": 540},
@@ -142,6 +145,7 @@ CLIENTS = {
         "design_label": "Alliance LGBTQ design ready",
         "logo_area": "top-center Alliance LGBTQ+ logo area",
         "template_context": "fixed Alliance LGBTQ+ design layer with yellow and pink title bars",
+        "reference_focus_zone": {"x": 40, "y": 330, "w": 1000, "h": 910},
         "title_bands": [
             {"x": 38, "y": 1256, "w": 1042, "h": 108, "radius": 58, "fill": (250, 202, 48, 255), "text_fill": "#ffffff", "font_max": 74, "font_min": 34, "text_center_x": 540},
             {"x": -10, "y": 1376, "w": 1052, "h": 108, "radius": 58, "fill": (237, 49, 134, 255), "text_fill": "#ffffff", "font_max": 74, "font_min": 34, "text_center_x": 540},
@@ -175,6 +179,7 @@ CLIENTS = {
         "design_label": "Siyata design ready",
         "logo_area": "upper Siyata design area",
         "template_context": "fixed Siyata design layer with a black lower field and blue title box",
+        "reference_focus_zone": {"x": 40, "y": 560, "w": 1000, "h": 640},
         "title_bands": [
             {
                 "x": 96,
@@ -221,11 +226,18 @@ def public_client_status(config):
         "font_ready": config["font_path"].exists(),
         "design_label": config["design_label"],
         "font_label": config["font_label"],
+        "reference_focus_zone": client_reference_focus_zone(config),
     }
 
 
 def client_focus_zone(config):
     return config.get("focus_zone", FOCUS_ZONE)
+
+
+def client_reference_focus_zone(config):
+    # Source cutouts are contained in this whole opening. Generated scenes use
+    # the smaller focus zone for their important details and can extend beyond it.
+    return config.get("reference_focus_zone", client_focus_zone(config))
 
 
 def subject_position(config):
@@ -272,7 +284,7 @@ def safe_zone_negative_prompt(config=None):
 
 def person_reference_prompt(config=None):
     config = config or get_client_config(DEFAULT_CLIENT)
-    zone = client_focus_zone(config)
+    zone = client_reference_focus_zone(config)
     x1, y1 = zone["x"], zone["y"]
     x2, y2 = x1 + zone["w"], y1 + zone["h"]
     return (
@@ -511,7 +523,7 @@ def create_reference_background_brief(
     script_text, title, config, variant_index, variant_count, extra_prompt, person_reference_path
 ):
     """Plan scenery only; original people are composed locally after generation."""
-    zone = client_focus_zone(config)
+    zone = client_reference_focus_zone(config)
     direction = (
         "Create a vertical 9:16 photographic environment based on the script and title. "
         f"{person_reference_prompt(config)} "
@@ -1117,7 +1129,7 @@ def handle_create(
             progress_callback(8, "Preparing the original people without changing their appearance...")
         with IMAGE_PROCESSING_LOCK:
             reference_layer, composition_info = prepare_reference_photo(
-                person_reference_path, CANVAS_SIZE, client_focus_zone(config)
+                person_reference_path, CANVAS_SIZE, client_reference_focus_zone(config)
             )
         source_mask_path = composition_info.pop("source_mask_path", None)
         if composition_info.get("requires_mask_validation"):
@@ -1141,7 +1153,7 @@ def handle_create(
             if not validated:
                 with IMAGE_PROCESSING_LOCK:
                     reference_layer, composition_info = prepare_reference_photo(
-                        person_reference_path, CANVAS_SIZE, client_focus_zone(config), intact=True
+                        person_reference_path, CANVAS_SIZE, client_reference_focus_zone(config), intact=True
                     )
                 composition_info.update(
                     fallback_used=True,
@@ -1492,7 +1504,7 @@ class ThumbnailHandler(BaseHTTPRequestHandler):
                     "image_model": openai_image_model(),
                     "reference_strategy": REFERENCE_STRATEGY,
                     "reference_preservation": REFERENCE_PRESERVATION,
-                    "reference_workflow_version": 2,
+                    "reference_workflow_version": 3,
                     "reference_background_removal": "local_mask_with_coverage_check",
                     "client": public_client_status(config),
                     "clients": {slug: public_client_status(client) for slug, client in CLIENTS.items()},

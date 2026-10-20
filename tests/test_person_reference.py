@@ -191,7 +191,7 @@ class PersonReferenceTests(unittest.TestCase):
         audit = {"all_people_covered": True, "all_heads_and_hair_covered": True,
                  "all_visible_person_parts_covered": True, "reason": "Every visible part is retained."}
         config = agent.CLIENTS["alliance-latin"]
-        candidate, info = self.mask_candidate(self.reference, agent.CANVAS_SIZE, agent.client_focus_zone(config))
+        candidate, info = self.mask_candidate(self.reference, agent.CANVAS_SIZE, agent.client_reference_focus_zone(config))
         with mock.patch.object(agent, "prepare_reference_photo", side_effect=self.mask_candidate) as prepare, mock.patch.object(agent, "validate_reference_mask", return_value=audit) as validate, mock.patch.object(agent, "create_visual_brief", return_value=self.brief), mock.patch.object(agent, "openai_images_generate", return_value=self.generated_bytes):
             result = agent.handle_create("University journey.", "SOURCE | PEOPLE", client_slug="alliance-latin", person_reference_path=self.reference)
         prepare.assert_called_once()
@@ -219,7 +219,7 @@ class PersonReferenceTests(unittest.TestCase):
                 failures.append((f"{field}-{value!r}", {**complete, field: value}))
             failures.append((f"{field}-missing", {key: value for key, value in complete.items() if key != field}))
         config = agent.CLIENTS["alliance-latin"]
-        intact, info = prepared_photo(self.reference, agent.CANVAS_SIZE, agent.client_focus_zone(config), intact=True)
+        intact, info = prepared_photo(self.reference, agent.CANVAS_SIZE, agent.client_reference_focus_zone(config), intact=True)
         box = info["panels"][0]["destination_box"]
         with mock.patch.object(agent, "create_visual_brief", return_value=self.brief), mock.patch.object(agent, "openai_images_generate", return_value=self.generated_bytes):
             for label, audit in failures:
@@ -377,6 +377,33 @@ class PersonReferenceTests(unittest.TestCase):
                         if not alpha:
                             self.assertEqual(rendered.crop(box).tobytes(), layer.crop(box).convert("RGB").tobytes())
 
+    def test_reference_placement_uses_more_room_without_covering_logos_or_titles(self):
+        # Measured template artwork ends at y=295 for Alliance and y=504 for
+        # Zoomex. Keep 35px/26px breathing room; Siyata retains its established
+        # y=560 boundary for faint upper branding.
+        protected_logo_bottom = {
+            "zoomex": 530, "alliance-latin": 330, "alliance-black": 330,
+            "alliance-lgbtq": 330, "siyata": 560,
+        }
+        for slug, config in agent.CLIENTS.items():
+            with self.subTest(client=slug):
+                zone = agent.client_reference_focus_zone(config)
+                self.assertGreaterEqual(zone["x"], 0)
+                self.assertLessEqual(zone["x"] + zone["w"], agent.CANVAS_SIZE[0])
+                self.assertGreaterEqual(zone["y"], 0)
+                self.assertLess(zone["y"] + zone["h"], min(band["y"] for band in config["title_bands"]))
+                prompt = agent.person_reference_prompt(config)
+                self.assertIn(f"x={zone['x']}..{zone['x'] + zone['w']}", prompt)
+                self.assertIn(f"y={zone['y']}..{zone['y'] + zone['h']}", prompt)
+                if slug == "leverage-edu":
+                    self.assertEqual(zone, {"x": 400, "y": 460, "w": 640, "h": 510})
+                    self.assertEqual(zone, agent.client_focus_zone(config))
+                    self.assertGreater(zone["x"], 384, "The Leverage logo occupies x=0..384")
+                else:
+                    self.assertGreaterEqual(zone["y"], protected_logo_bottom[slug])
+                    self.assertEqual(zone["w"], 1000, "Use the wide brand opening for multiple photographed people")
+                    self.assertEqual(agent.client_focus_zone(config), {"x": 210, "y": 560, "w": 660, "h": 660})
+
     def test_reference_pipeline_keeps_original_pixels_and_metadata_for_every_brand(self):
         self.network.side_effect = self.api_response
         os.environ["OPENAI_REFERENCE_IMAGE_MODEL"] = "gpt-image-1-mini"
@@ -388,7 +415,7 @@ class PersonReferenceTests(unittest.TestCase):
                 self.assert_original_photo_metadata(result)
                 variants = result.get("thumbnails") or [result]
                 self.assertEqual(len(variants), 2 if slug in agent.TWO_THUMBNAIL_CLIENTS else 1)
-                layer, info = prepared_photo(self.reference, agent.CANVAS_SIZE, agent.client_focus_zone(config))
+                layer, info = prepared_photo(self.reference, agent.CANVAS_SIZE, agent.client_reference_focus_zone(config))
                 box = info["panels"][0]["destination_box"]
                 for variant in variants:
                     self.assert_original_photo_metadata(variant)
@@ -407,7 +434,7 @@ class PersonReferenceTests(unittest.TestCase):
         self.assertNotEqual(results[0]["thumbnail"], results[1]["thumbnail"])
         for result, photo in zip(results, (self.reference, alternate)):
             config = agent.CLIENTS["alliance-latin"]
-            layer, info = prepared_photo(photo, agent.CANVAS_SIZE, agent.client_focus_zone(config))
+            layer, info = prepared_photo(photo, agent.CANVAS_SIZE, agent.client_reference_focus_zone(config))
             box = info["panels"][0]["destination_box"]
             with Image.open(result["thumbnail"]) as rendered:
                 self.assertEqual(rendered.crop(box).tobytes(), layer.crop(box).convert("RGB").tobytes())
@@ -456,7 +483,7 @@ class PersonReferenceTests(unittest.TestCase):
                 status, headers, png = request("GET", result["download_url"])
                 self.assertEqual(status, 200)
                 self.assertIn("attachment", headers["Content-Disposition"])
-                layer, info = prepared_photo(self.reference, agent.CANVAS_SIZE, agent.client_focus_zone(agent.CLIENTS["alliance-latin"]))
+                layer, info = prepared_photo(self.reference, agent.CANVAS_SIZE, agent.client_reference_focus_zone(agent.CLIENTS["alliance-latin"]))
                 box = info["panels"][0]["destination_box"]
                 with Image.open(io.BytesIO(png)) as rendered:
                     self.assertEqual(rendered.size, (1080, 1920))
