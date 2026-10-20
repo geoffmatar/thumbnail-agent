@@ -198,6 +198,20 @@ function resultItems(result) {
   return [result];
 }
 
+function verifyOriginalPhotoResult(result) {
+  const records = Array.isArray(result?.thumbnails) && result.thumbnails.length
+    ? [result, ...result.thumbnails]
+    : [result];
+  const originalPeopleConfirmed = records.every((item) => (
+    item?.person_reference_used === true
+    && item.reference_strategy === "source_photo_composite"
+    && item.reference_preservation === "original_pixels"
+  ));
+  if (!originalPeopleConfirmed) {
+    throw new Error("Could not confirm the original uploaded people were preserved. This result is hidden. Refresh the app and try again.");
+  }
+}
+
 function createResultCard(item, index, state, client) {
   const card = document.createElement("article");
   card.className = "result-card";
@@ -352,6 +366,7 @@ function stopProgress() {
 function updateCreateButtonState() {
   const state = getClientState();
   createBtn.disabled = Boolean(state?.running);
+  personReference.disabled = Boolean(state?.running);
 }
 
 function hydrateClientState(clientSlug) {
@@ -430,8 +445,9 @@ function previewThumbnailWithKeyboard(event) {
 }
 
 function updateReferenceFileName() {
-  const file = personReference.files && personReference.files[0];
   const state = getClientState();
+  if (state.running) return;
+  const file = personReference.files && personReference.files[0];
   state.personReferenceFile = file || null;
   renderReferenceState();
 }
@@ -466,6 +482,8 @@ async function createThumbnail() {
   syncCurrentFormState();
   const jobClient = currentClient;
   const state = getClientState(jobClient);
+  if (state.running) return;
+  const jobReferenceFile = state.personReferenceFile;
   const title = titleInput.value.trim();
   if (!title) {
     setStatus("Add the thumbnail title first.", true, jobClient);
@@ -488,8 +506,8 @@ async function createThumbnail() {
   if (extraPromptValue) {
     form.append("extra_prompt", extraPromptValue);
   }
-  if (state.personReferenceFile) {
-    form.append("person_reference", state.personReferenceFile);
+  if (jobReferenceFile) {
+    form.append("person_reference", jobReferenceFile);
   }
 
   state.result = null;
@@ -505,6 +523,7 @@ async function createThumbnail() {
 
     const statusUrl = payload.status_url || `/api/jobs/${payload.job_id}`;
     const result = await waitForJob(statusUrl, jobClient);
+    if (jobReferenceFile) verifyOriginalPhotoResult(result);
 
     state.result = result;
     state.resultVersion = Date.now();

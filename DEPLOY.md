@@ -15,19 +15,19 @@ OPENAI_API_KEY=sk-...
 OPENAI_MODEL=gpt-5.5
 OPENAI_IMAGE_MODEL=gpt-image-1
 OPENAI_IMAGE_QUALITY=medium
-# Optional override for person-reference edits:
-# OPENAI_REFERENCE_IMAGE_MODEL=gpt-image-1.5
 ```
 
 Do not put `OPENAI_API_KEY` in the code or send it to teammates.
 
-The reference workflow uses the existing server key. `OPENAI_REFERENCE_IMAGE_MODEL` falls back to `OPENAI_IMAGE_MODEL` when unset; the image-model default is `gpt-image-1`, and the quality default is `medium`.
+The photo workflow uses the existing server key for planning and background generation. `OPENAI_IMAGE_MODEL` defaults to `gpt-image-1`, and `OPENAI_IMAGE_QUALITY` defaults to `medium`. No additional key or reference-edit model setting is needed.
 
 ## Person Reference Workflow
 
-Reference photos are sent as image input to visual planning and directly to the OpenAI Images edits endpoint (`/v1/images/edits`). Supported reference-edit models are `gpt-image-1`, `gpt-image-1.5`, and `gpt-image-2`. Edits use high input fidelity (`input_fidelity="high"`) with `gpt-image-1` and `gpt-image-1.5`; `gpt-image-2` handles high input fidelity automatically. `gpt-image-1-mini` is rejected for person references because it does not support high input fidelity. Reference-edit failures are surfaced rather than retried as generation without the reference.
+With a person photo attached, OpenAI generates the background scene. The server then composites the uploaded photo into the selected brand template. The people retain their original faces, hair, expressions, pose, and clothing; only proportional scaling and positioning are applied to fit the image opening.
 
-The workflow aims to retain every pictured person's facial identity while allowing clothing, expressions, pose, and scene changes. Teammates should compare the output with the actual reference photo before use. Identity consistency is not guaranteed, and the app does not automatically validate faces.
+Opaque photos retain their complete image, including the original background. Transparent PNG cutouts retain their supplied transparency. For people-only placement, teammates should upload a transparent PNG cutout. The photo can still be sent to OpenAI for visual planning.
+
+Script and extra-prompt requests apply to the background and do not change the uploaded people's appearance. Teammates should review placement, visibility, and supplied transparency before using the thumbnail.
 
 ## Recommended: Render
 

@@ -23,6 +23,8 @@ import cgi
 
 from PIL import Image, ImageDraw, ImageEnhance, ImageFont, ImageOps
 
+from reference_photo import prepare_reference_photo
+
 
 APP_DIR = Path(__file__).resolve().parent
 PUBLIC_DIR = APP_DIR / "public"
@@ -33,7 +35,8 @@ WORK_DIR = APP_DIR / "work"
 
 OPENAI_ENDPOINT = "https://api.openai.com/v1/responses"
 OPENAI_IMAGES_GENERATE_ENDPOINT = "https://api.openai.com/v1/images/generations"
-OPENAI_IMAGES_EDIT_ENDPOINT = "https://api.openai.com/v1/images/edits"
+REFERENCE_STRATEGY = "source_photo_composite"
+REFERENCE_PRESERVATION = "original_pixels"
 PUBLIC_ASSET_PATHS = {
     "/styles.css",
     "/app.js",
@@ -198,6 +201,8 @@ TWO_THUMBNAIL_CLIENTS = {"zoomex", "siyata"}
 JOB_TTL_SECONDS = 60 * 60 * 3
 JOBS = {}
 JOBS_LOCK = threading.Lock()
+# Bound local image-processing memory when several teams submit jobs together.
+IMAGE_PROCESSING_LOCK = threading.Lock()
 
 
 def get_client_config(client_slug):
@@ -270,19 +275,12 @@ def person_reference_prompt(config=None):
     x1, y1 = zone["x"], zone["y"]
     x2, y2 = x1 + zone["w"], y1 + zone["h"]
     return (
-        "PERSON IDENTITY PRESERVATION: the attached photograph is the identity source for every person shown in it. "
-        "Keep every pictured person as the same recognizable individual; preserve each person's facial structure, facial proportions, "
-        "eyes, nose, mouth, jawline, distinguishing facial features, apparent age, skin tone, and overall likeness. "
-        "Do not replace a person with a generic lookalike, invent a different face, beautify or reshape facial features, "
-        "merge or mix identities, swap faces between people, duplicate a person, or omit anyone from a multi-person reference. "
-        "Keep each person's features associated with that same person. "
-        "Clothing, pose, background, setting, and lighting may change to suit the script. "
-        "Facial expressions may change naturally, including a smile or sadness, while preserving the same underlying facial anatomy and identity. "
-        "Create a natural photographic scene rather than a collage, rectangular photo insert, illustration, or drawing. "
-        f"Fit all referenced people {subject_position(config)}, aiming for x={x1}..{x2}, y={y1}..{y2}. "
-        "Adapt the composition by repositioning or proportionally scaling people and extending the surrounding scene or canvas; "
-        "never alter facial identity to satisfy the composition. If placement conflicts with identity preservation, "
-        "preserve every person's identity and visibility first."
+        "SOURCE PHOTO COMPOSITION: the application will place the original uploaded people over this background locally. "
+        "Their faces, hair, expressions, poses, clothing and colors remain those of the source photograph. "
+        "Generate only the environment, scenery and relevant inanimate objects, with no people, faces, bodies, hands, "
+        "portraits, silhouettes, human reflections, mannequins or replacement subjects anywhere. "
+        f"Keep the background behind x={x1}..{x2}, y={y1}..{y2} calm and unobstructed for the original people. "
+        "Any requested change to a person's appearance must not be included in the background prompt."
     )
 
 
@@ -336,26 +334,6 @@ def openai_model():
 
 def openai_image_model():
     return os.environ.get("OPENAI_IMAGE_MODEL", "gpt-image-1")
-
-
-def openai_reference_image_model():
-    return (
-        os.environ.get("OPENAI_REFERENCE_IMAGE_MODEL", "").strip()
-        or openai_image_model().strip()
-        or "gpt-image-1"
-    )
-
-
-def reference_input_fidelity_parameter(model=None):
-    model = model or openai_reference_image_model()
-    if model in {"gpt-image-1", "gpt-image-1.5"}:
-        return "high"
-    if re.match(r"^gpt-image-2(?:[.-]|$)", model):
-        return None
-    raise RuntimeError(
-        "The configured reference image model does not support this identity-preserving workflow. "
-        "Set OPENAI_REFERENCE_IMAGE_MODEL to gpt-image-1, gpt-image-1.5, or a supported gpt-image-2 model."
-    )
 
 
 def env_int(name, default):
@@ -468,63 +446,6 @@ def openai_images_generate(prompt, timeout=None):
     return extract_image_api_bytes(result, "OpenAI image generation did not return generated image data.")
 
 
-def openai_images_edit(prompt, reference_path, timeout=None):
-    api_key = openai_key()
-    if not api_key:
-        raise RuntimeError("Add your OpenAI API key before generating thumbnails.")
-    timeout = timeout or openai_image_timeout()
-    model = openai_reference_image_model()
-    input_fidelity = reference_input_fidelity_parameter(model)
-    fields = {
-        "model": model,
-        "prompt": prompt,
-        "size": "1024x1536",
-        "quality": openai_image_quality(),
-    }
-    if input_fidelity:
-        fields["input_fidelity"] = input_fidelity
-
-    reference_path = Path(reference_path)
-    reference_bytes = reference_path.read_bytes()
-    if not reference_bytes:
-        raise RuntimeError("The reference image is empty. Upload a clear JPG, PNG, or WebP photo.")
-    boundary = f"----ThumbnailAgent{uuid.uuid4().hex}"
-    parts = []
-    for name, value in fields.items():
-        parts.append(
-            f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"\r\n\r\n{value}\r\n'.encode("utf-8")
-        )
-    suffix = reference_path.suffix.lower()
-    filename = "reference" + (suffix if suffix in {".jpg", ".jpeg", ".png", ".webp"} else ".jpg")
-    mime_type = mimetypes.guess_type(filename)[0] or "image/jpeg"
-    parts.append(
-        f'--{boundary}\r\nContent-Disposition: form-data; name="image"; filename="{filename}"\r\n'
-        f"Content-Type: {mime_type}\r\n\r\n".encode("utf-8")
-    )
-    parts.extend([reference_bytes, f"\r\n--{boundary}--\r\n".encode("ascii")])
-    request = urllib.request.Request(
-        OPENAI_IMAGES_EDIT_ENDPOINT,
-        data=b"".join(parts),
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": f"multipart/form-data; boundary={boundary}",
-        },
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            result = json.loads(response.read().decode("utf-8"))
-    except urllib.error.HTTPError as error:
-        body_text = error.read().decode("utf-8", errors="replace")
-        try:
-            message = json.loads(body_text).get("error", {}).get("message") or body_text
-        except json.JSONDecodeError:
-            message = body_text
-        raise RuntimeError(f"OpenAI reference image editing failed: {message}") from error
-
-    return extract_image_api_bytes(result, "OpenAI reference image editing did not return generated image data.")
-
-
 def extract_response_text(response):
     if isinstance(response.get("output_text"), str):
         return response["output_text"]
@@ -585,6 +506,71 @@ def visual_brief_schema():
     }
 
 
+def create_reference_background_brief(
+    script_text, title, config, variant_index, variant_count, extra_prompt, person_reference_path
+):
+    """Plan scenery only; original people are composed locally after generation."""
+    zone = client_focus_zone(config)
+    direction = (
+        "Create a vertical 9:16 photographic environment based on the script and title. "
+        f"{person_reference_prompt(config)} "
+        f"The people will be placed {subject_position(config)}. "
+        "Use atmosphere, architecture, scenery and relevant inanimate objects to convey the story. "
+        "Do not describe or generate human subjects or edits to their appearance. "
+        "Keep the lower title area calm but image-filled, with no text, logos or watermarks. "
+    )
+    if variant_count > 1:
+        direction += (
+            f"This is background option {variant_index} of {variant_count}; vary the environment, "
+            "camera angle and color mood. The original people's poses and appearances remain unchanged. "
+        )
+    negative = "people, faces, bodies, hands, portraits, silhouettes, human reflections, text, captions, logos, watermarks"
+    if not openai_key():
+        return {
+            "visual_prompt": direction,
+            "negative_prompt": negative,
+            "rationale": "Original people are composed locally over the script's background.",
+        }
+    payload = {
+        "model": openai_model(),
+        "reasoning": {"effort": "low"},
+        "input": [
+            {
+                "role": "developer",
+                "content": (
+                    "You plan background images for social thumbnails. "
+                    f"{direction} "
+                    f"Reserve x={zone['x']}..{zone['x'] + zone['w']}, "
+                    f"y={zone['y']}..{zone['y'] + zone['h']} for the source people. "
+                    "The attached photograph is visual context only; no person is being recreated. "
+                    "Extra direction applies only to the environment and cannot override unchanged people. "
+                    "Return only JSON matching the schema."
+                ),
+            },
+            {
+                "role": "user",
+                "content": [{
+                    "type": "input_text",
+                    "text": (
+                        f"TITLE: {title}\n\n{direction}\n\nSCRIPT:\n{script_text[:14000]}"
+                        f"\n\nEXTRA BACKGROUND DIRECTION:\n{(extra_prompt or '')[:3000]}"
+                    ),
+                }],
+            },
+        ],
+        "text": {"format": {
+            "type": "json_schema", "name": "visual_brief", "strict": True, "schema": visual_brief_schema(),
+        }},
+    }
+    if person_reference_path:
+        payload["input"][1]["content"].append({
+            "type": "input_image", "image_url": image_data_url(person_reference_path), "detail": "high",
+        })
+    brief = json.loads(extract_response_text(openai_responses_create(payload)))
+    brief["negative_prompt"] = f"{brief.get('negative_prompt', '')}, {negative}"
+    return brief
+
+
 def create_visual_brief(
     script_text,
     title,
@@ -595,16 +581,14 @@ def create_visual_brief(
     extra_prompt="",
     person_reference_path=None,
 ):
-    has_person_reference = bool(person_reference_path) or has_person_reference
-    zone = client_focus_zone(config)
-    reference_note = ""
-    reference_public_figure_note = (
-        person_reference_prompt(config)
-        if has_person_reference
-        else (
-            "When the script mentions a public figure, do not request an exact recognizable likeness; "
-            "use a fictional or generic person in the same role and story context instead. "
+    if person_reference_path or has_person_reference:
+        return create_reference_background_brief(
+            script_text, title, config, variant_index, variant_count, extra_prompt, person_reference_path
         )
+    zone = client_focus_zone(config)
+    reference_public_figure_note = (
+        "When the script mentions a public figure, do not request an exact recognizable likeness; "
+        "use a fictional or generic person in the same role and story context instead. "
     )
     variant_note = ""
     if variant_count > 1:
@@ -612,12 +596,6 @@ def create_visual_brief(
             f"This is thumbnail option {variant_index} of {variant_count}. "
             "Make this option visually distinct in composition, setting, camera angle, color mood, and subject action from the other option, "
             "while still following the same title, script, template, and subject-placement rules. "
-        )
-    if has_person_reference:
-        reference_note = (
-            "The attached person reference photo will also be used during image editing. "
-            "Build the scene around every person pictured, preserving their individual identities and facial features. "
-            "Do not invent replacement appearances from the script or remove people from the reference. "
         )
     extra_prompt = (extra_prompt or "").strip()
     extra_prompt_note = ""
@@ -631,10 +609,8 @@ def create_visual_brief(
         return {
             "visual_prompt": (
                 "Create a vertical 9:16 full-frame editorial thumbnail image based on the script. "
-                f"{reference_note}"
                 f"{variant_note}"
                 f"{extra_prompt_note}"
-                f"{reference_public_figure_note if has_person_reference else ''} "
                 f"No text, no captions, no logos, no black empty poster space. {focus_zone_prompt(config)}"
             ),
             "negative_prompt": (
@@ -675,7 +651,6 @@ def create_visual_brief(
                             "Create only the subject/background image prompt for this script. "
                             f"The final image must be full-frame 9:16 and fill the whole thumbnail behind a {config['template_context']}. "
                             "Avoid black voids, blank poster space, title-card layouts, or large empty areas. "
-                            f"{reference_note}"
                             f"{variant_note}"
                             f"{focus_zone_prompt(config)} "
                             f"{reference_public_figure_note}"
@@ -702,10 +677,6 @@ def create_visual_brief(
             }
         },
     }
-    if person_reference_path:
-        payload["input"][1]["content"].append(
-            {"type": "input_image", "image_url": image_data_url(person_reference_path), "detail": "high"}
-        )
     return json.loads(extract_response_text(openai_responses_create(payload)))
 
 
@@ -749,10 +720,8 @@ def image_data_url(path):
     return f"data:{mime_type};base64,{encoded}"
 
 
-def image_generation_payload(prompt, person_reference_path=None):
+def image_generation_payload(prompt):
     content = [{"type": "input_text", "text": prompt}]
-    if person_reference_path:
-        content.append({"type": "input_image", "image_url": image_data_url(person_reference_path)})
     return {
         "model": openai_model(),
         "input": [{"role": "user", "content": content}],
@@ -762,19 +731,22 @@ def image_generation_payload(prompt, person_reference_path=None):
 
 def generate_subject_image(brief, config, person_reference_path=None):
     negative_prompt = combined_negative_prompt(brief, config)
-    prompt = standard_subject_image_prompt(
-        brief, config, negative_prompt, has_person_reference=bool(person_reference_path)
-    )
     if person_reference_path:
-        prompt = f"{prompt}\n\n{person_reference_prompt(config)}"
+        prompt = (
+            f"{brief['visual_prompt']}\n\n"
+            "Hard requirements: vertical 9:16 full-bleed photographic BACKGROUND ONLY. "
+            "Fill the entire canvas with environment, depth and relevant inanimate objects. "
+            "No text, readable letters, captions, logos or watermarks. "
+            f"{person_reference_prompt(config)} "
+            f"The original people will be placed {subject_position(config)}. "
+            f"Avoid: {negative_prompt}, people, faces, bodies, hands, portraits, human silhouettes. "
+            "FINAL REQUIREMENT: do not generate any people or change any uploaded person; "
+            "only the background is being generated."
+        )
+    else:
+        prompt = standard_subject_image_prompt(brief, config, negative_prompt)
     prompts = [prompt]
     last_error = None
-
-    if person_reference_path:
-        image_bytes = openai_images_edit(prompt, person_reference_path)
-        image_path = WORK_DIR / f"subject-{uuid.uuid4().hex}.png"
-        image_path.write_bytes(image_bytes)
-        return image_path
 
     try:
         image_bytes = openai_images_generate(prompt)
@@ -942,7 +914,7 @@ def draw_title(canvas, title, config):
     return canvas
 
 
-def render_thumbnail(title, subject_image_path, output_path, config=None):
+def render_thumbnail(title, subject_image_path, output_path, config=None, reference_layer=None):
     config = config or get_client_config(DEFAULT_CLIENT)
     design_path = config["design_path"]
     font_path = config["font_path"]
@@ -953,6 +925,12 @@ def render_thumbnail(title, subject_image_path, output_path, config=None):
     subject = adjust_subject(fit_cover(Image.open(subject_image_path), CANVAS_SIZE))
     design = Image.open(design_path).convert("RGBA").resize(CANVAS_SIZE, Image.Resampling.LANCZOS)
     canvas = Image.alpha_composite(subject, design)
+    if reference_layer is not None:
+        if reference_layer.mode != "RGBA" or reference_layer.size != CANVAS_SIZE:
+            raise RuntimeError("The original-photo layer has an invalid format or size.")
+        # The original people must never pass through tone adjustments or brand
+        # tints. Only the background is graded; source RGB is placed afterward.
+        canvas = Image.alpha_composite(canvas, reference_layer)
     canvas = draw_title(canvas, title, config)
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -979,13 +957,9 @@ def normalize_reference_image(path, delete_source=False):
         raise RuntimeError("Could not read the uploaded reference image. Try a clear JPG or PNG photo.") from error
 
     image.thumbnail((2048, 2048), Image.Resampling.LANCZOS)
-    if image.mode in ("RGBA", "LA"):
-        background = Image.new("RGB", image.size, (255, 255, 255))
-        alpha = image.getchannel("A") if image.mode == "RGBA" else image.getchannel("A")
-        background.paste(image.convert("RGBA"), mask=alpha)
-        image = background
-    else:
-        image = image.convert("RGB")
+    # Preserve supplied cutouts, including palette PNG transparency. Flattening
+    # onto white loses the exact matte and forces unnecessary segmentation.
+    image = image.convert("RGBA" if "A" in image.getbands() or "transparency" in image.info else "RGB")
 
     WORK_DIR.mkdir(parents=True, exist_ok=True)
     output_path = WORK_DIR / f"person-reference-{uuid.uuid4().hex}.png"
@@ -1039,10 +1013,13 @@ def handle_create(
         raise RuntimeError("Use either a subject image or a person reference, not both.")
     reference_settings = {
         "reference_strategy": None,
+        "reference_preservation": None,
+        "reference_composition": None,
         "reference_image_model": None,
         "reference_input_fidelity": None,
         "reference_input_fidelity_parameter": None,
     }
+    reference_layer = None
     if person_reference_path is not None:
         try:
             person_reference_path = Path(person_reference_path)
@@ -1054,17 +1031,23 @@ def handle_create(
             raise RuntimeError(
                 "Could not read the reference image. Upload a valid, non-empty JPG, PNG, or WebP photo."
             ) from error
-        reference_model = openai_reference_image_model()
-        input_fidelity = reference_input_fidelity_parameter(reference_model)
+        if progress_callback:
+            progress_callback(8, "Preparing the original people without changing their appearance...")
+        with IMAGE_PROCESSING_LOCK:
+            reference_layer, composition_info = prepare_reference_photo(
+                person_reference_path, CANVAS_SIZE, client_focus_zone(config)
+            )
+        if reference_layer.mode != "RGBA" or reference_layer.size != CANVAS_SIZE or not reference_layer.getbbox():
+            raise RuntimeError("Could not place the original photo. Try a clear photo or a transparent PNG cutout.")
         reference_settings.update(
-            reference_strategy="images_edit",
-            reference_image_model=reference_model,
-            reference_input_fidelity="high",
-            reference_input_fidelity_parameter=input_fidelity,
+            reference_strategy=REFERENCE_STRATEGY,
+            reference_preservation=REFERENCE_PRESERVATION,
+            reference_composition=composition_info,
         )
 
     thumbnail_count = 2 if config["slug"] in TWO_THUMBNAIL_CLIENTS else 1
     timestamp = time.strftime("%Y%m%d-%H%M%S")
+    operation_id = uuid.uuid4().hex
 
     def build_variant(index, show_detailed_progress=False):
         variant_index = index + 1
@@ -1086,7 +1069,8 @@ def handle_create(
 
         if progress_callback and show_detailed_progress:
             label = f" {variant_index}/{thumbnail_count}" if thumbnail_count > 1 else ""
-            progress_callback(34, f"Visual direction ready. Generating subject image{label}...")
+            image_kind = "background" if reference_layer is not None else "subject image"
+            progress_callback(34, f"Visual direction ready. Generating {image_kind}{label}...")
 
         used_ai = bool(openai_key())
         current_subject_path = subject_path
@@ -1101,8 +1085,9 @@ def handle_create(
             )
 
         filename_suffix = f"-option-{variant_index}" if thumbnail_count > 1 else ""
-        output_path = GENERATED_DIR / f"{timestamp}-{config['slug']}-{safe_filename(title)}{filename_suffix}.png"
-        render_thumbnail(title, current_subject_path, output_path, config)
+        output_path = GENERATED_DIR / f"{timestamp}-{config['slug']}-{safe_filename(title)}-{operation_id}{filename_suffix}.png"
+        with IMAGE_PROCESSING_LOCK:
+            render_thumbnail(title, current_subject_path, output_path, config, reference_layer=reference_layer)
 
         if progress_callback and show_detailed_progress:
             label = f" {variant_index}/{thumbnail_count}" if thumbnail_count > 1 else ""
@@ -1134,7 +1119,8 @@ def handle_create(
     else:
         if progress_callback:
             progress_callback(12, "Building two visual directions...")
-            progress_callback(34, "Generating both subject images at the same time...")
+            image_kind = "backgrounds" if reference_layer is not None else "subject images"
+            progress_callback(34, f"Generating both {image_kind} at the same time...")
 
         metas_by_index = [None] * thumbnail_count
         completed_count = 0
@@ -1245,6 +1231,8 @@ def run_create_job(job_id, script_text, title, client_slug=DEFAULT_CLIENT, perso
                     "option_count": item.get("option_count", len(source_thumbnails)),
                     "option_label": item.get("option_label", ""),
                     "reference_strategy": item.get("reference_strategy"),
+                    "reference_preservation": item.get("reference_preservation"),
+                    "reference_composition": item.get("reference_composition"),
                     "reference_image_model": item.get("reference_image_model"),
                     "reference_input_fidelity": item.get("reference_input_fidelity"),
                     "reference_input_fidelity_parameter": item.get("reference_input_fidelity_parameter"),
@@ -1263,6 +1251,8 @@ def run_create_job(job_id, script_text, title, client_slug=DEFAULT_CLIENT, perso
             "person_reference_used": meta.get("person_reference_used", False),
             "extra_prompt_used": meta.get("extra_prompt_used", False),
             "reference_strategy": meta.get("reference_strategy"),
+            "reference_preservation": meta.get("reference_preservation"),
+            "reference_composition": meta.get("reference_composition"),
             "reference_image_model": meta.get("reference_image_model"),
             "reference_input_fidelity": meta.get("reference_input_fidelity"),
             "reference_input_fidelity_parameter": meta.get("reference_input_fidelity_parameter"),
@@ -1330,6 +1320,7 @@ class ThumbnailHandler(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
         self.end_headers()
         if include_body:
             self.wfile.write(body)
@@ -1342,6 +1333,8 @@ class ThumbnailHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", mimetypes.guess_type(str(path))[0] or "application/octet-stream")
         self.send_header("Content-Length", str(path.stat().st_size))
+        if path.suffix.lower() in {".html", ".js", ".css"}:
+            self.send_header("Cache-Control", "no-cache")
         if attachment_name:
             safe_name = Path(attachment_name).name
             self.send_header("Content-Disposition", f'attachment; filename="{safe_name}"')
@@ -1385,6 +1378,9 @@ class ThumbnailHandler(BaseHTTPRequestHandler):
                 {
                     "openai_configured": bool(openai_key()),
                     "model": openai_model(),
+                    "image_model": openai_image_model(),
+                    "reference_strategy": REFERENCE_STRATEGY,
+                    "reference_preservation": REFERENCE_PRESERVATION,
                     "client": public_client_status(config),
                     "clients": {slug: public_client_status(client) for slug, client in CLIENTS.items()},
                     "design_ready": config["design_path"].exists(),

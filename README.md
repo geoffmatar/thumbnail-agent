@@ -17,23 +17,23 @@ Normal flow:
 
 1. Choose an agent and enter your title.
 2. Paste the script; optionally add visual instructions and a person reference image.
-3. The agent creates the scene from the script, using a reference edit when a photo is attached.
-4. The fixed brand design is composited on top, and the title is drawn in that brand's font.
+3. The agent creates the background from the script. If a photo is attached, its original people are composited into the thumbnail.
+4. The app layers the background, brand design, and optional photo, then draws the title in that brand's font.
 5. Review the result and download the PNG.
 
 Templates and title fonts are bundled with the app.
 
 ## Person Reference Images
 
-Upload a photo when the thumbnail should feature the people shown in it. The reference workflow aims to preserve each person's facial structure and distinguishing features while allowing the script or extra prompt to change clothing, expression, pose, lighting, and scene. It creates a new scene rather than pasting the original photo into the template.
+Upload a photo when the thumbnail should feature its original people. The app generates a background from the script, then composites the uploaded photo into the thumbnail. Faces, hair, expressions, pose, and clothing come from the original photo and are kept unchanged.
 
-The actual uploaded image is supplied to both visual planning and the direct OpenAI Images edits request (`/v1/images/edits`). The edit request uses `input_fidelity="high"` for `gpt-image-1` and `gpt-image-1.5`; `gpt-image-2` handles high input fidelity automatically. A failed reference edit is reported as an error rather than falling back to generation without the photo.
+Opaque photos stay complete, including their original background. Transparent PNG cutouts keep their supplied transparency. For people-only placement, upload a transparent PNG cutout. The photo can still be sent to OpenAI for visual planning.
 
-Reference edits use `OPENAI_REFERENCE_IMAGE_MODEL` when set, otherwise `OPENAI_IMAGE_MODEL`, whose default is `gpt-image-1`. `OPENAI_IMAGE_QUALITY` controls image quality and defaults to `medium`. Keep using the existing OpenAI API key; the reference workflow does not require a separate key.
+The photo may be proportionally scaled and repositioned to fit the selected brand's image opening. The script and extra prompt control the generated background; requests to change the uploaded people's expression, hairstyle, pose, or clothes do not apply to those people. Review the finished thumbnail for placement, visibility, and supplied transparency.
 
-Supported reference-edit models are `gpt-image-1`, `gpt-image-1.5`, and `gpt-image-2`. `gpt-image-1-mini` is rejected for person references because it does not support high input fidelity.
+Photo selection is locked while that brand's thumbnail is being created. The studio hides a photo-based result if the server does not confirm original-photo composition.
 
-Compare the result with the actual reference photo before using it. Generative edits can still alter a face, and an allowed change of expression naturally changes its appearance. High input fidelity improves consistency but does not guarantee identical faces; the app does not automatically verify identity.
+Background generation uses `OPENAI_IMAGE_MODEL`, whose default is `gpt-image-1`. `OPENAI_IMAGE_QUALITY` defaults to `medium`. The photo composition uses the existing OpenAI key for planning and background generation; no additional key or reference-edit model setting is needed.
 
 ## Subject Placement
 
@@ -50,13 +50,12 @@ OPENAI_API_KEY="your_api_key_here"
 OPENAI_MODEL="gpt-5.5"
 OPENAI_IMAGE_MODEL="gpt-image-1"
 OPENAI_IMAGE_QUALITY="medium"
-# Optional override for person-reference edits:
-# OPENAI_REFERENCE_IMAGE_MODEL="gpt-image-1.5"
 ```
 
-Start the app:
+Install the dependencies and start the app:
 
 ```bash
+python3 -m pip install -r requirements.txt
 python3 thumbnail_agent.py serve
 ```
 
@@ -112,7 +111,7 @@ python3 thumbnail_agent.py render --script my-script.txt --title "THE KID WHO | 
 To use a person reference with a specific agent:
 
 ```bash
-python3 thumbnail_agent.py render --client alliance-latin --script my-script.txt --title "TITLE HERE" --person-reference person.png --extra-prompt "Keep the same people; change their outfits to formal wear."
+python3 thumbnail_agent.py render --client alliance-latin --script my-script.txt --title "TITLE HERE" --person-reference person.png --extra-prompt "Set the background at a university campus."
 ```
 
 For local testing without using image generation:

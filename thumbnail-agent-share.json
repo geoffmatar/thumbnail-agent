@@ -1,6 +1,6 @@
 {
   "name": "Thumbnail Agent",
-  "description": "Internal thumbnail generator with brand-specific templates and fonts, script-based image generation, optional person-reference edits to preserve facial identity while changing clothing, expressions, and scenes, and PNG download.",
+  "description": "Internal thumbnail generator with brand-specific templates and fonts, script-based background generation, optional original-photo composition that keeps uploaded people unchanged, and PNG download.",
   "repository": {
     "url": "https://github.com/geoffmatar/thumbnail-agent.git",
     "branch": "main"
@@ -27,15 +27,13 @@
     "OPENAI_IMAGE_MODEL": "gpt-image-1",
     "OPENAI_IMAGE_QUALITY": "medium"
   },
-  "optional_environment_variables": {
-    "OPENAI_REFERENCE_IMAGE_MODEL": "Optional person-reference edit model; defaults to OPENAI_IMAGE_MODEL when unset."
-  },
   "person_reference_notes": [
-    "The actual reference photo is supplied to visual planning and directly to the OpenAI Images edits endpoint.",
-    "Reference edits use high input fidelity for gpt-image-1 and gpt-image-1.5; gpt-image-2 handles high input fidelity automatically.",
-    "Use the existing server OpenAI API key; person-reference edits do not require a separate key.",
-    "Outfits, expressions, poses, and scenes may change while preserving facial identity is the goal.",
-    "Compare generated faces with the actual photo before use. Exact identity consistency is not guaranteed or automatically validated."
+    "The background is generated from the script, then the uploaded photo is composited into the thumbnail.",
+    "Opaque photos stay complete, including their original background. Transparent PNG cutouts retain their supplied transparency. The photo can still be sent to OpenAI for visual planning.",
+    "The original people, faces, hair, expressions, pose, and clothing stay unchanged; only proportional scaling and positioning are applied to fit the brand.",
+    "Script and extra-prompt requests change the background, not the uploaded people's appearance.",
+    "Use the existing server OpenAI API key for planning and background generation; no separate reference-edit model setting is needed.",
+    "For people-only placement, upload a transparent PNG cutout. Review photo placement, visibility, and supplied transparency."
   ],
   "security_notes": [
     "Do not share your personal OpenAI API key.",
@@ -48,9 +46,9 @@
     "Enter the title.",
     "Leverage Edu uses three headline lines, with the last highlighted turquoise; use MY JOURNEY TO | UNIVERSITY OF | SALFORD to choose the line breaks.",
     "Paste the script.",
-    "Optionally upload a photo of the people whose facial identity should be preserved; outfits, expressions, and scenes may change.",
+    "Optionally upload a photo to keep its original people, faces, hair, expressions, and clothing unchanged in a new background.",
     "Click Create Thumbnail.",
-    "Review the generated people against the actual reference photo when one was supplied.",
+    "Review photo placement and supplied transparency when a person photo was supplied.",
     "Download the PNG when finished."
   ]
 }
