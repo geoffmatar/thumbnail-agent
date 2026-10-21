@@ -305,15 +305,6 @@ function resultItems(result) {
   return [result];
 }
 
-function verifyCameraFacingResult(result) {
-  const records = Array.isArray(result?.thumbnails) && result.thumbnails.length
-    ? [result, ...result.thumbnails]
-    : [result];
-  if (!records.every((item) => item?.camera_facing_verified === true)) {
-    throw new Error("Could not verify that every face looks at the camera. No result is shown. Please try again.");
-  }
-}
-
 function verifyReferenceResult(result, referenceCount) {
   const records = Array.isArray(result?.thumbnails) && result.thumbnails.length
     ? [result, ...result.thumbnails]
@@ -637,7 +628,6 @@ async function createThumbnail() {
 
     const statusUrl = payload.status_url || `/api/jobs/${payload.job_id}`;
     const result = await waitForJob(statusUrl, jobClient);
-    verifyCameraFacingResult(result);
     if (jobReferenceFiles.length) verifyReferenceResult(result, jobReferenceFiles.length);
 
     state.result = result;

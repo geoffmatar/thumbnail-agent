@@ -23,17 +23,17 @@ Normal flow:
 
 Templates and title fonts are bundled with the app.
 
-Every brand prompts featured people with front-facing heads, visible eyes, and direct eye contact with the camera, with or without reference photos. Script and extra-prompt instructions cannot override this direction.
+Every brand aims to turn featured faces naturally toward the camera while protecting their facial features. Angled or looking-away reference photos are accepted; uploads do not need to face the camera.
 
-The final rendered thumbnail receives a vision check for face direction and visibility. With reference photos, it also receives the appearance review described below. A failed gaze or appearance review permits one shared retry, with at most two generation attempts per thumbnail, reusing the original references when supplied. An unavailable or malformed check stops creation; the studio shows only results whose required checks pass for every option.
+An optional gaze check can guide one automatic correction, with at most two generation attempts per thumbnail shared with appearance corrections. Off-camera gaze or a missing, malformed, or unavailable gaze check never blocks a thumbnail. With reference photos, the app keeps the best result that passes the required appearance review, even if its gaze remains off-camera. It always reuses the original references for a correction.
 
 ## Person Reference Images
 
 Upload one photo per person, up to four people. The studio starts with **Upload image 1** and reveals the next upload after each selection. Each reference shows its original thumbnail and filename, with Replace and Remove controls; click the thumbnail to enlarge it. References are remembered separately for each brand while the page stays open and are locked during that brand's generation.
 
-All selected photos are supplied together, in order, to visual planning and the OpenAI Images edits request. Each person's facial proportions, hair, and distinguishing features guide their identity in the generated scene. The script and extra prompt can change the setting, body pose, expression, and clothing while heads and eyes remain directed toward the camera. There is no local cutout, pasted-photo composition, or intact-photo fallback.
+All selected photos are supplied together, in order, to visual planning and the OpenAI Images edits request. Each person's facial proportions, hair, and distinguishing features guide their identity in the generated scene. The script and extra prompt can change the setting, body pose, expression, and clothing. Camera-facing head and eye direction is a best-effort target, with facial features taking priority over forced reorientation. There is no local cutout, pasted-photo composition, or intact-photo fallback.
 
-After the camera-facing check passes, an appearance review compares each reference photo with the final rendered thumbnail for visible face shape, eyes and brows, nose and mouth, hair, glasses, and sufficient clarity. It uses `OPENAI_PERSON_REVIEW_MODEL`, defaulting to `gpt-6-astra`, independently of the `OPENAI_MODEL` used for visual planning and gaze checks. Optional jewelry may change. This is a review of visible edit quality, without identifying anyone or proving an exact identity match. The check can miss changes, and exact likeness is not guaranteed by image generation; review all faces and hair before using the thumbnail.
+An appearance review compares each reference photo with the final rendered thumbnail for visible face shape, eyes and brows, nose and mouth, hair, glasses, and sufficient clarity, regardless of gaze direction. It uses `OPENAI_PERSON_REVIEW_MODEL`, defaulting to `gpt-6-astra`, independently of the `OPENAI_MODEL` used for visual planning and optional gaze checks. Optional jewelry may change. Changed facial features or an unavailable or malformed appearance review can still stop creation. This is a review of visible edit quality, without identifying anyone or proving an exact identity match. The check can miss changes, and exact likeness is not guaranteed by image generation; review all faces and hair before using the thumbnail.
 
 The studio checks the server's reported reference count, edit strategy, and successful appearance review for every option before showing a photo-based result. Uploading identical image content more than once is rejected; different photos may share a filename.
 
@@ -126,7 +126,7 @@ To use a person reference with a specific agent:
 python3 thumbnail_agent.py render --client alliance-latin --script my-script.txt --title "TITLE HERE" --person-reference person.png --extra-prompt "Show this person arriving at a university campus, smiling in formal clothes."
 ```
 
-To use an existing scene image instead of generating one, OpenAI must still be configured for the final camera-facing check. A supplied image is checked once:
+To use an existing scene image instead of generating one, supply `--subject-image`. Its optional gaze check does not block the result or require a camera-facing image:
 
 ```bash
 python3 thumbnail_agent.py render --script my-script.txt --title "TITLE HERE" --subject-image test.png

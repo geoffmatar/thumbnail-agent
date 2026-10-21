@@ -3,6 +3,7 @@ import io
 import json
 import os
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -50,7 +51,7 @@ class CameraFacingTests(unittest.TestCase):
             "references": [{"reference_index": index, **{flag: True for flag in agent.REFERENCE_APPEARANCE_FLAGS}, "notes": "Offline feature fixture."} for index in range(1, len(reference_paths) + 1)],
             "notes": "Synthetic images; feature review is tested separately.",
         })
-        appearance.start()
+        self.appearance = appearance.start()
         self.addCleanup(appearance.stop)
         self.references = []
         for index, color in enumerate(("#ce3153", "#22b867")):
@@ -76,7 +77,8 @@ class CameraFacingTests(unittest.TestCase):
         self.assertIn("camera", text)
         self.assertIn("eyes", text)
         self.assertIn("face", text)
-        self.assertRegex(text, r"overrid|takes priority|higher priority|non.negotiable")
+        self.assertRegex(text, r"best.effort|prefer|aim")
+        self.assertRegex(text, r"likeness|appearance|facial features")
 
     def test_all_brands_plan_camera_facing_people_despite_conflicting_user_directions(self):
         for slug, config in agent.CLIENTS.items():
@@ -141,7 +143,7 @@ class CameraFacingTests(unittest.TestCase):
         self.assert_camera_rule(content[0]["text"])
         self.assertIn(agent.camera_facing_negative_prompt(), content[0]["text"])
 
-    def test_alternate_options_keep_the_same_hard_camera_rule(self):
+    def test_alternate_options_keep_the_same_best_effort_camera_goal(self):
         for slug in agent.TWO_THUMBNAIL_CLIENTS:
             for references in ([], self.references):
                 for option_index in (1, 2):
@@ -245,28 +247,162 @@ class CameraFacingTests(unittest.TestCase):
                 self.assertIs(result["camera_facing_verified"], True)
                 self.assertEqual(result["camera_facing_check"], gaze_check())
 
-    def test_two_failed_gaze_checks_never_publish_a_thumbnail(self):
-        with mock.patch.object(agent, "create_visual_brief", return_value=self.brief), mock.patch.object(agent, "openai_images_edit", return_value=self.generated_bytes) as edit, mock.patch.object(agent, "openai_images_generate") as generate, mock.patch.object(agent, "validate_camera_facing", return_value=gaze_check(all_faces_front_facing=False)) as audit:
-            with self.assertRaises(RuntimeError):
-                agent.handle_create(self.script, "MY JOURNEY | BEGINS", client_slug="alliance-latin", person_reference_paths=self.references)
-        self.assertEqual(edit.call_count, 2)
+    def test_imperfect_gaze_keeps_usable_options_for_every_brand_with_and_without_references(self):
+        imperfect = gaze_check(all_eyes_on_camera=False, reason="The photographed people look at their books.")
+        for slug in agent.CLIENTS:
+            for references in ([], self.references):
+                with self.subTest(client=slug, reference_count=len(references)):
+                    self.appearance.reset_mock()
+                    with mock.patch.object(agent, "create_visual_brief", return_value=self.brief), mock.patch.object(agent, "openai_images_edit", return_value=self.generated_bytes) as edit, mock.patch.object(agent, "openai_images_generate", return_value=self.generated_bytes) as generate, mock.patch.object(agent, "validate_camera_facing", return_value=imperfect) as audit:
+                        result = agent.handle_create(self.script, "MY JOURNEY | BEGINS", client_slug=slug, person_reference_paths=references)
+                    variants = result.get("thumbnails") or [result]
+                    expected_options = 2 if slug in agent.TWO_THUMBNAIL_CLIENTS else 1
+                    self.assertEqual(len(variants), expected_options)
+                    self.assertEqual(audit.call_count, expected_options * 2)
+                    self.assertEqual(self.appearance.call_count, expected_options * 2 if references else 0)
+                    generator = edit if references else generate
+                    self.assertEqual(generator.call_count, expected_options * 2)
+                    (generate if references else edit).assert_not_called()
+                    if references:
+                        self.assertTrue(all(call.args[1] == references for call in edit.call_args_list))
+                    for item in [result, *variants]:
+                        self.assertIs(item["camera_facing_verified"], False)
+                        self.assertEqual(item["camera_facing_check"], imperfect)
+                        self.assertEqual(item["camera_facing_attempts"], 2)
+                        self.assertEqual(item["selected_generation_attempt"], 1, "Equal camera results retain the first usable edit")
+                        self.assertIs(item["reference_appearance_passed"], True if references else None)
+                    for item in variants:
+                        self.assertTrue(Path(item["thumbnail"]).is_file())
+
+    def test_unknown_gaze_is_nonblocking_and_does_not_trigger_an_optional_retry(self):
+        unknown_checks = (None, {}, gaze_check(all_eyes_on_camera="true"), gaze_check(visible_people_count=True), RuntimeError("Optional camera service unavailable"))
+        for references in ([], self.references):
+            for check in unknown_checks:
+                with self.subTest(reference_count=len(references), check=check):
+                    self.appearance.reset_mock()
+                    kwargs = {"side_effect": check} if isinstance(check, Exception) else {"return_value": check}
+                    with mock.patch.object(agent, "create_visual_brief", return_value=self.brief), mock.patch.object(agent, "openai_images_edit", return_value=self.generated_bytes) as edit, mock.patch.object(agent, "openai_images_generate", return_value=self.generated_bytes) as generate, mock.patch.object(agent, "validate_camera_facing", **kwargs) as audit:
+                        result = agent.handle_create(self.script, "MY JOURNEY | BEGINS", client_slug="alliance-latin", person_reference_paths=references)
+                    (edit if references else generate).assert_called_once()
+                    audit.assert_called_once()
+                    self.assertEqual(self.appearance.call_count, 1 if references else 0)
+                    self.assertIsNone(result["camera_facing_verified"])
+                    self.assertIsNone(result["camera_facing_check"])
+                    self.assertEqual(result["camera_facing_attempts"], 1)
+                    self.assertEqual(result["selected_generation_attempt"], 1)
+                    self.assertIs(result["reference_appearance_passed"], True if references else None)
+
+    def test_optional_retry_errors_and_bad_features_preserve_the_first_usable_image_and_its_metadata(self):
+        first_gaze = gaze_check(all_eyes_on_camera=False, reason="First candidate keeps the source gaze.")
+        good_features = {"references": [{"reference_index": index, **{flag: True for flag in agent.REFERENCE_APPEARANCE_FLAGS}, "notes": "Synthetic first candidate."} for index in (1, 2)], "notes": "Passing feature fixture."}
+        bad_features = json.loads(json.dumps(good_features))
+        bad_features["references"][0]["hair_preserved"] = False
+        second_bytes = png_bytes("#e8b735")
+        expected = self.root / "expected-first.png"
+        agent.render_thumbnail("MY JOURNEY | BEGINS", self.scene, expected, agent.CLIENTS["alliance-latin"])
+        cases = (
+            ("generation unavailable", [self.generated_bytes, RuntimeError("Actual retry generation error")], [first_gaze], [good_features]),
+            ("gaze unavailable", [self.generated_bytes, second_bytes], [first_gaze, RuntimeError("Optional camera service unavailable")], [good_features, good_features]),
+            ("gaze malformed", [self.generated_bytes, second_bytes], [first_gaze, {}], [good_features, good_features]),
+            ("features failed", [self.generated_bytes, second_bytes], [first_gaze, gaze_check()], [good_features, bad_features]),
+            ("features unavailable", [self.generated_bytes, second_bytes], [first_gaze, gaze_check()], [good_features, RuntimeError("Required review unavailable on retry")]),
+            ("features malformed", [self.generated_bytes, second_bytes], [first_gaze, gaze_check()], [good_features, {}]),
+            ("equal gaze", [self.generated_bytes, second_bytes], [first_gaze, first_gaze], [good_features, good_features]),
+        )
+        for label, images, checks, reviews in cases:
+            with self.subTest(retry=label):
+                with mock.patch.object(agent, "create_visual_brief", return_value=self.brief), mock.patch.object(agent, "openai_images_edit", side_effect=images) as edit, mock.patch.object(agent, "validate_camera_facing", side_effect=checks), mock.patch.object(agent, "validate_reference_appearance", side_effect=reviews):
+                    result = agent.handle_create(self.script, "MY JOURNEY | BEGINS", client_slug="alliance-latin", person_reference_paths=self.references)
+                self.assertEqual(edit.call_count, 2)
+                self.assertTrue(all(call.args[1] == self.references for call in edit.call_args_list))
+                self.assertIs(result["camera_facing_verified"], False)
+                self.assertEqual(result["camera_facing_check"], first_gaze)
+                self.assertEqual(result["reference_appearance_check"], good_features)
+                self.assertEqual(result["selected_generation_attempt"], 1)
+                self.assertEqual(result["camera_facing_attempts"], 2)
+                self.assertEqual(result["visual_prompt"], self.brief["visual_prompt"])
+                with Image.open(result["thumbnail"]) as actual, Image.open(expected) as original:
+                    self.assertEqual(actual.tobytes(), original.tobytes())
+                saved = json.loads(Path(result["thumbnail"]).with_suffix(".json").read_text())
+                self.assertEqual(saved["selected_generation_attempt"], 1)
+                self.assertEqual(saved["visual_prompt"], self.brief["visual_prompt"])
+
+    def test_a_better_optional_gaze_result_can_be_selected_without_claiming_perfect_gaze(self):
+        first = gaze_check(all_faces_front_facing=False, all_eyes_on_camera=False, all_faces_unobstructed=False)
+        improved = gaze_check(all_eyes_on_camera=False)
+        with mock.patch.object(agent, "create_visual_brief", return_value=self.brief), mock.patch.object(agent, "openai_images_edit", side_effect=[self.generated_bytes, png_bytes("#e8b735")]), mock.patch.object(agent, "validate_camera_facing", side_effect=[first, improved]):
+            result = agent.handle_create(self.script, "MY JOURNEY | BEGINS", client_slug="alliance-latin", person_reference_paths=self.references)
+        self.assertIs(result["camera_facing_verified"], False)
+        self.assertEqual(result["camera_facing_check"], improved)
+        self.assertEqual(result["selected_generation_attempt"], 2)
+        self.assertNotEqual(result["visual_prompt"], self.brief["visual_prompt"])
+
+    def test_optional_gaze_correction_cannot_replace_a_person_with_a_people_free_scene(self):
+        first = gaze_check(visible_people_count=1, all_eyes_on_camera=False)
+        empty_scene = gaze_check(people_present=False, visible_people_count=0, all_faces_front_facing=False, all_eyes_on_camera=False, all_faces_unobstructed=False)
+        expected = self.root / "expected-person-candidate.png"
+        agent.render_thumbnail("MY JOURNEY | BEGINS", self.scene, expected, agent.CLIENTS["alliance-latin"])
+        with mock.patch.object(agent, "create_visual_brief", return_value=self.brief), mock.patch.object(agent, "openai_images_generate", side_effect=[self.generated_bytes, png_bytes("#e8b735")]) as generate, mock.patch.object(agent, "validate_camera_facing", side_effect=[first, empty_scene]) as audit:
+            result = agent.handle_create(self.script, "MY JOURNEY | BEGINS", client_slug="alliance-latin")
+        self.assertEqual(generate.call_count, 2)
         self.assertEqual(audit.call_count, 2)
-        generate.assert_not_called()
-        self.assertEqual(list(agent.GENERATED_DIR.iterdir()), [])
+        self.appearance.assert_not_called()
+        self.assertEqual(result["selected_generation_attempt"], 1)
+        self.assertEqual(result["camera_facing_attempts"], 2)
+        self.assertIs(result["camera_facing_verified"], False)
+        self.assertEqual(result["camera_facing_check"], first)
+        self.assertEqual(result["visual_prompt"], self.brief["visual_prompt"])
+        with Image.open(result["thumbnail"]) as actual, Image.open(expected) as original:
+            self.assertEqual(actual.tobytes(), original.tobytes())
+        saved = json.loads(Path(result["thumbnail"]).with_suffix(".json").read_text())
+        self.assertEqual(saved["selected_generation_attempt"], 1)
+        self.assertEqual(saved["camera_facing_check"]["visible_people_count"], 1)
 
-    def test_unavailable_gaze_audit_never_publishes_an_unverified_candidate(self):
-        with mock.patch.object(agent, "create_visual_brief", return_value=self.brief), mock.patch.object(agent, "openai_images_edit", return_value=self.generated_bytes), mock.patch.object(agent, "validate_camera_facing", side_effect=RuntimeError("Camera verification unavailable")):
-            with self.assertRaises(RuntimeError):
-                agent.handle_create(self.script, "MY JOURNEY | BEGINS", client_slug="alliance-latin", person_reference_paths=self.references)
-        self.assertEqual(list(agent.GENERATED_DIR.iterdir()), [])
-
-    def test_malformed_gaze_results_never_publish_even_when_fields_are_truthy(self):
-        for check in (None, {}, gaze_check(all_eyes_on_camera="true"), gaze_check(visible_people_count=True)):
-            with self.subTest(check=check):
-                with mock.patch.object(agent, "create_visual_brief", return_value=self.brief), mock.patch.object(agent, "openai_images_edit", return_value=self.generated_bytes), mock.patch.object(agent, "validate_camera_facing", return_value=check):
-                    with self.assertRaises(RuntimeError):
-                        agent.handle_create(self.script, "MY JOURNEY | BEGINS", client_slug="alliance-latin", person_reference_paths=self.references)
+    def test_a_real_first_generation_error_still_fails_without_returning_a_thumbnail(self):
+        for references in ([], self.references):
+            with self.subTest(reference_count=len(references)):
+                with mock.patch.object(agent, "create_visual_brief", return_value=self.brief), mock.patch.object(agent, "generate_subject_image", side_effect=RuntimeError("Actual first generation failed")), mock.patch.object(agent, "validate_camera_facing") as audit:
+                    with self.assertRaisesRegex(RuntimeError, "Actual first generation failed"):
+                        agent.handle_create(self.script, "MY JOURNEY | BEGINS", client_slug="alliance-latin", person_reference_paths=references)
+                audit.assert_not_called()
                 self.assertEqual(list(agent.GENERATED_DIR.iterdir()), [])
+
+    def test_public_jobs_finish_without_the_old_camera_facing_error_or_warnings(self):
+        imperfect = gaze_check(all_eyes_on_camera=False)
+        for check, verified in ((imperfect, False), (None, None)):
+            with self.subTest(verified=verified):
+                with mock.patch.object(agent, "JOBS", {}), mock.patch.object(agent, "create_visual_brief", return_value=self.brief), mock.patch.object(agent, "openai_images_edit", return_value=self.generated_bytes), mock.patch.object(agent, "validate_camera_facing", return_value=check):
+                    job_id = agent.start_create_job(self.script, "MY JOURNEY | BEGINS", client_slug="alliance-latin", person_reference_paths=self.references)
+                    deadline = time.monotonic() + 5
+                    while True:
+                        job = agent.get_job(job_id)
+                        if job["status"] in {"done", "error"}:
+                            break
+                        self.assertLess(time.monotonic(), deadline)
+                        time.sleep(0.01)
+                self.assertEqual(job["status"], "done", job.get("error"))
+                self.assertEqual(job["error"], "")
+                self.assertIs(job["result"]["camera_facing_verified"], verified)
+                self.assertIs(job["result"]["thumbnails"][0]["camera_facing_verified"], verified)
+                self.assertEqual(job["result"]["selected_generation_attempt"], 1)
+                self.assertNotIn("did not pass the camera-facing check", json.dumps(job))
+                self.assertNotIn("warning", json.dumps(job).lower())
+
+    def test_normal_optional_retry_generation_error_keeps_the_usable_first_candidate(self):
+        imperfect = gaze_check(all_eyes_on_camera=False)
+        with mock.patch.object(agent, "create_visual_brief", return_value=self.brief), mock.patch.object(agent, "openai_images_generate", side_effect=[self.generated_bytes, RuntimeError("Optional retry generation unavailable")]) as generate, mock.patch.object(agent, "validate_camera_facing", return_value=imperfect):
+            result = agent.handle_create(self.script, "MY JOURNEY | BEGINS", client_slug="alliance-latin")
+        self.assertEqual(generate.call_count, 2)
+        self.assertIs(result["camera_facing_verified"], False)
+        self.assertEqual(result["selected_generation_attempt"], 1)
+        self.assertTrue(Path(result["thumbnail"]).is_file())
+
+    def test_source_appearance_takes_priority_over_forcing_a_different_orientation(self):
+        prompt = agent.person_reference_prompt(agent.CLIENTS["alliance-latin"], 2).lower()
+        self.assertNotIn("even if the source photo or script looks elsewhere", prompt)
+        self.assertRegex(prompt, r"(?:angled|looking.away).{0,90}valid references")
+        self.assertRegex(prompt, r"(?:do not|never) force.{0,120}frontal.{0,120}(?:appearance|features)")
+        self.assertRegex(agent.camera_facing_prompt().lower(), r"preserv.{0,180}(?:takes priority|higher priority)")
 
     def test_a_scene_without_people_is_allowed_when_no_people_were_referenced(self):
         no_people = gaze_check(people_present=False, visible_people_count=0, all_faces_front_facing=False, all_eyes_on_camera=False, all_faces_unobstructed=False)
@@ -275,13 +411,14 @@ class CameraFacingTests(unittest.TestCase):
         self.assertIs(result["camera_facing_verified"], True)
         self.assertEqual(result["camera_facing_check"], no_people)
 
-    def test_a_provided_subject_is_rejected_without_replacing_it_when_gaze_fails(self):
+    def test_a_provided_subject_is_kept_without_replacing_it_when_gaze_fails(self):
         with mock.patch.object(agent, "create_visual_brief", return_value=self.brief), mock.patch.object(agent, "generate_subject_image") as generate, mock.patch.object(agent, "validate_camera_facing", return_value=gaze_check(all_faces_unobstructed=False)) as audit:
-            with self.assertRaises(RuntimeError):
-                agent.handle_create(self.script, "MY JOURNEY | BEGINS", subject_path=self.scene, client_slug="alliance-latin")
+            result = agent.handle_create(self.script, "MY JOURNEY | BEGINS", subject_path=self.scene, client_slug="alliance-latin")
         generate.assert_not_called()
         audit.assert_called_once()
-        self.assertEqual(list(agent.GENERATED_DIR.iterdir()), [])
+        self.assertIs(result["camera_facing_verified"], False)
+        self.assertEqual(result["camera_facing_attempts"], 1)
+        self.assertTrue(Path(result["thumbnail"]).is_file())
 
 
 if __name__ == "__main__":

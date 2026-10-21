@@ -227,20 +227,36 @@ class ReferenceAppearanceTests(unittest.TestCase):
         self.validate_camera_facing.side_effect = [bad_gaze, self.good_gaze]
         bad_features = feature_check()
         bad_features["references"][0]["hair_preserved"] = False
+        with mock.patch.object(agent, "validate_reference_appearance", side_effect=[feature_check(), bad_features]) as audit:
+            result = self.create()
+        self.assertEqual(self.openai_images_edit.call_count, 2)
+        self.assertEqual(self.validate_camera_facing.call_count, 2)
+        self.assertEqual(audit.call_count, 2)
+        self.assertEqual(result["selected_generation_attempt"], 1)
+        self.assertEqual(result["camera_facing_attempts"], 2)
+        self.assertIs(result["camera_facing_verified"], False)
+        self.assertIs(result["reference_appearance_passed"], True)
+
+    def test_required_feature_review_runs_despite_failed_or_unknown_gaze(self):
+        for check, attempts in (({**self.good_gaze, "all_faces_unobstructed": False}, 2), (None, 1)):
+            with self.subTest(gaze=check):
+                self.validate_camera_facing.return_value = check
+                self.openai_images_edit.reset_mock()
+                with mock.patch.object(agent, "validate_reference_appearance", return_value=feature_check()) as audit:
+                    result = self.create()
+                self.assertEqual(audit.call_count, attempts)
+                self.assertEqual(self.openai_images_edit.call_count, attempts)
+                self.assertIs(result["reference_appearance_passed"], True)
+
+    def test_failed_required_features_cannot_be_bypassed_by_unknown_gaze(self):
+        self.validate_camera_facing.return_value = None
+        bad_features = feature_check()
+        bad_features["references"][0]["face_shape_preserved"] = False
         with mock.patch.object(agent, "validate_reference_appearance", return_value=bad_features) as audit:
             with self.assertRaises(RuntimeError):
                 self.create()
+        self.assertEqual(audit.call_count, 2)
         self.assertEqual(self.openai_images_edit.call_count, 2)
-        self.assertEqual(self.validate_camera_facing.call_count, 2)
-        audit.assert_called_once()
-        self.assert_nothing_published()
-
-    def test_feature_review_is_skipped_until_gaze_passes(self):
-        self.validate_camera_facing.return_value = {**self.good_gaze, "all_faces_unobstructed": False}
-        with mock.patch.object(agent, "validate_reference_appearance") as audit:
-            with self.assertRaises(RuntimeError):
-                self.create()
-        audit.assert_not_called()
         self.assert_nothing_published()
 
     def test_no_reference_scene_skips_feature_review_and_reports_no_check(self):
