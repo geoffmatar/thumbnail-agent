@@ -477,12 +477,44 @@ def generated_file_path(filename):
     return GENERATED_DIR / Path(filename).name
 
 
-def safe_openai_http_error(status):
-    # Never relay provider bodies: they may echo credentials or private inputs.
-    if status in {401, 403}:
-        message = "OpenAI rejected the server credentials or model access. Check the server's OpenAI configuration."
+def safe_openai_error_code(error):
+    """Read only a known error code; never expose provider text or raw bodies."""
+    allowed = {
+        "invalid_api_key", "permission_denied", "model_not_found",
+        "organization_spend_limit_exceeded", "project_spend_limit_exceeded",
+        "organization_usage_limit_exceeded", "credit_balance_exhausted",
+        "insufficient_quota", "rate_limit_exceeded", "slow_down",
+    }
+    try:
+        body = error.read(65537)
+        if len(body) > 65536:
+            return None
+        payload = json.loads(body)
+        detail = payload.get("error") if isinstance(payload, dict) else None
+        code = detail.get("code") if isinstance(detail, dict) else None
+        return code if isinstance(code, str) and code in allowed else None
+    except Exception:
+        return None
+
+
+def safe_openai_http_error(status, error_code=None):
+    # Never relay provider bodies/messages: they may echo credentials or inputs.
+    error_code = error_code if isinstance(error_code, str) else None
+    if status == 401:
+        message = "OpenAI could not authenticate the server API key. Check the server's OPENAI_API_KEY, organization, and IP restrictions."
+    elif status == 403:
+        message = "OpenAI denied this server permission to use the requested service or model. Check API key permissions, project/model access, and supported region."
     elif status == 429:
-        message = "OpenAI reached a rate limit or quota. Try again later or check the server's OpenAI usage."
+        messages = {
+            "organization_spend_limit_exceeded": "OpenAI's organization spend limit has been reached. Increase the organization's API spend limit before trying again.",
+            "project_spend_limit_exceeded": "OpenAI's project spend limit has been reached. Increase this project's API spend limit before trying again.",
+            "organization_usage_limit_exceeded": "OpenAI's organization usage limit has been reached. Request a higher API usage limit before trying again.",
+            "credit_balance_exhausted": "OpenAI's API credit balance is exhausted. Add API credits before trying again.",
+            "insufficient_quota": "OpenAI's API quota or credit balance is exhausted. Check API billing and usage limits before trying again.",
+            "rate_limit_exceeded": "OpenAI reached a rate limit. Try again later or reduce simultaneous thumbnail requests.",
+            "slow_down": "OpenAI reached a rate limit. Try again later or reduce simultaneous thumbnail requests.",
+        }
+        message = messages.get(error_code, "OpenAI reached a rate limit or quota. Check API usage and billing limits before trying again.")
     elif status >= 500:
         message = "OpenAI is temporarily unavailable. Please try again."
     else:
@@ -509,7 +541,7 @@ def openai_responses_create(payload, timeout=None):
         with urllib.request.urlopen(request, timeout=timeout) as response:
             return json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as error:
-        raise RuntimeError(safe_openai_http_error(error.code)) from error
+        raise RuntimeError(safe_openai_http_error(error.code, safe_openai_error_code(error))) from error
     except urllib.error.URLError as error:
         raise RuntimeError("Could not reach OpenAI. Please try again.") from error
     except (ValueError, TypeError) as error:
@@ -553,7 +585,7 @@ def openai_images_generate(prompt, timeout=None):
         with urllib.request.urlopen(request, timeout=timeout) as response:
             result = json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as error:
-        raise RuntimeError(safe_openai_http_error(error.code)) from error
+        raise RuntimeError(safe_openai_http_error(error.code, safe_openai_error_code(error))) from error
 
     return extract_image_api_bytes(result, "OpenAI image generation did not return generated image data.")
 
@@ -592,7 +624,7 @@ def openai_images_edit(prompt, reference_paths, timeout=None):
         with urllib.request.urlopen(request, timeout=timeout or openai_image_timeout()) as response:
             result = json.loads(response.read())
     except urllib.error.HTTPError as error:
-        raise RuntimeError(safe_openai_http_error(error.code)) from error
+        raise RuntimeError(safe_openai_http_error(error.code, safe_openai_error_code(error))) from error
     except urllib.error.URLError as error:
         raise RuntimeError("Could not reach the image service. Please try again.") from error
     except (ValueError, TypeError) as error:
