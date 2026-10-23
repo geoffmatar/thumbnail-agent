@@ -581,7 +581,7 @@ class PersonReferenceTests(unittest.TestCase):
                 self.assertIs(readiness["camera_facing_required"], False)
                 self.assertEqual(readiness["camera_facing_rule"], "best_effort")
                 self.assertIs(readiness["reference_appearance_check_required"], True)
-                self.assertEqual(readiness["reference_workflow_version"], 7)
+                self.assertEqual(readiness["reference_workflow_version"], 8)
                 self.assertEqual(readiness["person_image_model"], "gpt-image-1")
                 self.assertEqual(readiness["person_image_quality"], "medium")
                 self.assertEqual(readiness["person_image_size"], "1024x1536")

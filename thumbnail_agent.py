@@ -25,6 +25,9 @@ import cgi
 
 from PIL import Image, ImageDraw, ImageEnhance, ImageFont, ImageOps
 
+import gemini_client
+import higgsfield_client
+
 
 
 APP_DIR = Path(__file__).resolve().parent
@@ -459,6 +462,94 @@ def openai_person_image_quality():
     return os.environ.get("OPENAI_PERSON_IMAGE_QUALITY", "high").strip() or "high"
 
 
+def image_provider():
+    # Explicit selection keeps existing installations reversible. Never switch
+    # providers or fall back to another provider's billing after an API failure.
+    return os.environ.get("THUMBNAIL_IMAGE_PROVIDER", "openai").strip().lower()
+
+
+def vision_provider():
+    return os.environ.get("THUMBNAIL_VISION_PROVIDER", "openai").strip().lower()
+
+
+def image_provider_configured():
+    if image_provider() == "higgsfield":
+        return higgsfield_client.configured()
+    return image_provider() == "openai" and bool(openai_key())
+
+
+def vision_provider_configured():
+    if vision_provider() == "gemini":
+        return gemini_client.configured()
+    return vision_provider() == "openai" and bool(openai_key())
+
+
+def require_generation_configuration():
+    if image_provider() not in {"higgsfield", "openai"}:
+        raise RuntimeError("The server's image provider is unsupported. Ask the app admin to check provider setup.")
+    if vision_provider() not in {"gemini", "openai"}:
+        raise RuntimeError("The server's vision provider is unsupported. Ask the app admin to check provider setup.")
+    missing = []
+    if not image_provider_configured():
+        missing.append("Higgsfield image generation" if image_provider() == "higgsfield" else "OpenAI image generation")
+    if not vision_provider_configured():
+        missing.append("Gemini script planning and appearance review" if vision_provider() == "gemini" else "OpenAI script planning and appearance review")
+    if missing:
+        raise RuntimeError("Server setup incomplete: configure " + " and ".join(missing) + " before generating thumbnails.")
+    # Reject invalid local model settings before planning or image generation
+    # can spend money and only then discover that required review cannot run.
+    active_image_model(False)
+    active_image_model(True)
+    active_vision_model()
+    active_vision_model(review=True)
+
+
+def active_vision_model(review=False):
+    return gemini_client.model(review=review) if vision_provider() == "gemini" else (
+        openai_person_review_model() if review else openai_model()
+    )
+
+
+def active_image_model(has_references=False):
+    return higgsfield_client.image_model(has_references) if image_provider() == "higgsfield" else (
+        openai_person_image_model() if has_references else openai_image_model()
+    )
+
+
+def active_image_quality(has_references=False):
+    return "high" if image_provider() == "higgsfield" else (
+        openai_person_image_quality() if has_references else openai_image_quality()
+    )
+
+
+def active_image_size(has_references=False):
+    return "2k / 9:16" if image_provider() == "higgsfield" else image_size_for_model(active_image_model(has_references))
+
+
+def vision_responses_create(payload, timeout=None):
+    """Dispatch the existing ordered vision messages without an OpenAI fallback."""
+    if vision_provider() == "openai":
+        return openai_responses_create(payload, timeout=timeout)
+    if vision_provider() != "gemini":
+        raise RuntimeError("The server's vision provider is unsupported.")
+    system = []
+    content = []
+    for message in payload.get("input", []):
+        parts = message.get("content", [])
+        if isinstance(parts, str):
+            parts = [{"type": "input_text", "text": parts}]
+        if message.get("role") in {"developer", "system"}:
+            system.extend(part["text"] for part in parts if part.get("type") == "input_text")
+        else:
+            content.extend(parts)
+    result = gemini_client.generate_json(
+        system_prompt="\n\n".join(system), user_text="", content=content,
+        schema=payload["text"]["format"]["schema"], timeout=timeout or openai_text_timeout(),
+        model_name=active_vision_model(review=payload["text"]["format"].get("name") == "reference_feature_review"),
+    )
+    return {"output_text": json.dumps(result)}
+
+
 def browser_key_setup_allowed():
     return False
 
@@ -665,8 +756,8 @@ def user_friendly_error(error):
     lowered = message.lower()
     if "timed out" in lowered or "timeout" in lowered:
         return (
-            "OpenAI took too long to return the image. "
-            "Please try again; if it keeps happening, use a shorter script or try one thumbnail run again later."
+            "The generation service took too long. Check the job before starting another run; "
+            "a submitted image request may still be processing."
         )
     if "recognizable identity" in lowered and "public figure" in lowered:
         return (
@@ -734,7 +825,9 @@ def create_visual_brief(
             "not as a replacement for the script. Follow it unless it conflicts with the fixed template, no-text/no-logo rule, "
             "safe-zone composition, reference appearance, the best-effort camera-direction goal, or image safety rules. "
         )
-    if not openai_key():
+    if not vision_provider_configured():
+        if vision_provider() != "openai":
+            raise RuntimeError("Server setup incomplete: configure the selected vision provider for script planning and appearance review.")
         return {
             "visual_prompt": (
                 "Create a vertical 9:16 full-frame editorial thumbnail image based on the script. "
@@ -815,7 +908,7 @@ def create_visual_brief(
             {"type": "input_text", "text": f"Reference photo {index}: use this pictured person as a distinct subject. Keep their face and hair consistent with this photo."},
             {"type": "input_image", "image_url": image_data_url(reference), "detail": "high"},
         ])
-    return json.loads(extract_response_text(openai_responses_create(payload)))
+    return json.loads(extract_response_text(vision_responses_create(payload)))
 
 
 def combined_negative_prompt(brief, config):
@@ -948,7 +1041,7 @@ def validate_camera_facing(image_path, expected_people=0):
         "text": {"format": {"type": "json_schema", "name": "camera_facing_check", "strict": True, "schema": schema}},
     }
     try:
-        check = json.loads(extract_response_text(openai_responses_create(payload, timeout=min(openai_text_timeout(), 45))))
+        check = json.loads(extract_response_text(vision_responses_create(payload, timeout=min(openai_text_timeout(), 45))))
     except (ValueError, TypeError, KeyError) as error:
         raise RuntimeError("Could not verify face direction. No unchecked thumbnail was returned; please try again.") from error
     if not camera_facing_check_valid(check):
@@ -1039,7 +1132,7 @@ def validate_reference_appearance(image_path, reference_paths):
         "text": {"format": {"type": "json_schema", "name": "reference_feature_review", "strict": True, "schema": schema}},
     }
     try:
-        check = json.loads(extract_response_text(openai_responses_create(payload)))
+        check = json.loads(extract_response_text(vision_responses_create(payload)))
     except (ValueError, TypeError, KeyError) as error:
         raise RuntimeError("Could not check the faces against the references. No unchecked thumbnail was returned; please try again.") from error
     if not reference_appearance_check_valid(check, len(references)):
@@ -1059,6 +1152,8 @@ def image_generation_payload(prompt):
 
 
 def generate_subject_image(brief, config, person_reference_path=None, person_reference_paths=None):
+    if image_provider() not in {"higgsfield", "openai"}:
+        raise RuntimeError("The server's image provider is unsupported.")
     references = coerce_person_reference_paths(person_reference_path, person_reference_paths)
     negative_prompt = combined_negative_prompt(brief, config)
     prompt = standard_subject_image_prompt(brief, config, negative_prompt, has_person_reference=bool(references))
@@ -1069,10 +1164,20 @@ def generate_subject_image(brief, config, person_reference_path=None, person_ref
             for index in range(1, len(references) + 1)
         )
         prompt += "\n\n" + camera_facing_prompt()
-        image_bytes = openai_images_edit(prompt, references)
+        image_bytes = (
+            higgsfield_client.generate_image(prompt, reference_paths=references, timeout=openai_image_timeout())
+            if image_provider() == "higgsfield" else openai_images_edit(prompt, references)
+        )
         image_path = WORK_DIR / f"subject-{uuid.uuid4().hex}.png"
         image_path.write_bytes(image_bytes)
         return image_path
+    if image_provider() == "higgsfield":
+        image_bytes = higgsfield_client.generate_image(prompt, timeout=openai_image_timeout())
+        image_path = WORK_DIR / f"subject-{uuid.uuid4().hex}.png"
+        image_path.write_bytes(image_bytes)
+        return image_path
+    if image_provider() != "openai":
+        raise RuntimeError("The server's image provider is unsupported.")
     prompts = [prompt]
     last_error = None
 
@@ -1358,6 +1463,9 @@ def handle_create(
     references = coerce_person_reference_paths(person_reference_path, person_reference_paths)
     if subject_path and references:
         raise RuntimeError("Use either a subject image or person references, not both.")
+    if not subject_path:
+        # Check both providers before a job can spend on either one.
+        require_generation_configuration()
     reference_settings = {
         "reference_strategy": None,
         "reference_preservation": None,
@@ -1371,15 +1479,15 @@ def handle_create(
     }
     if references:
         validate_person_reference_paths(references)
-        reference_model = openai_person_image_model()
-        fidelity = reference_input_fidelity_parameter(reference_model)
+        reference_model = active_image_model(True)
+        fidelity = reference_input_fidelity_parameter(reference_model) if image_provider() == "openai" else None
         reference_settings.update(
             reference_strategy=REFERENCE_STRATEGY,
             reference_preservation=REFERENCE_PRESERVATION,
             reference_image_model=reference_model,
-            reference_image_quality=openai_person_image_quality(),
-            reference_image_size=image_size_for_model(reference_model),
-            reference_input_fidelity="high",
+            reference_image_quality=active_image_quality(True),
+            reference_image_size=active_image_size(True),
+            reference_input_fidelity="high" if image_provider() == "openai" else "reference_guided",
             reference_input_fidelity_parameter=fidelity,
         )
 
@@ -1410,7 +1518,7 @@ def handle_create(
             image_kind = "scene with the referenced people" if references else "subject image"
             progress_callback(34, f"Visual direction ready. Generating {image_kind}{label}...")
 
-        used_ai = bool(openai_key())
+        used_ai = not bool(subject_path)
         filename_suffix = f"-option-{variant_index}" if thumbnail_count > 1 else ""
         output_path = GENERATED_DIR / f"{timestamp}-{config['slug']}-{safe_filename(title)}-{operation_id}{filename_suffix}.png"
         candidate_path = WORK_DIR / f"camera-check-{operation_id}-{variant_index}.png"
@@ -1513,6 +1621,9 @@ def handle_create(
             "design_asset": str(config["design_path"]),
             "title_font": str(config["font_path"]),
             "used_ai": used_ai,
+            "image_provider": image_provider(),
+            "vision_provider": vision_provider(),
+            "image_model": active_image_model(bool(references)),
             "person_reference_used": bool(references),
             "extra_prompt_used": bool(extra_prompt),
             "option_index": variant_index,
@@ -1526,7 +1637,7 @@ def handle_create(
             "reference_appearance_checked": bool(references),
             "reference_appearance_passed": True if references else None,
             "reference_appearance_check": best["appearance_check"],
-            "reference_appearance_review_model": openai_person_review_model() if references else None,
+            "reference_appearance_review_model": active_vision_model(review=True) if references else None,
             **reference_settings,
         }
         save_json(output_path.with_suffix(".json"), meta)
@@ -1644,6 +1755,9 @@ def run_create_job(job_id, script_text, title, client_slug=DEFAULT_CLIENT, perso
                     "download_url": f"/api/download/{item_thumbnail_name}",
                     "filename": item_thumbnail_name,
                     "used_ai": item["used_ai"],
+                    "image_provider": item.get("image_provider"),
+                    "vision_provider": item.get("vision_provider"),
+                    "image_model": item.get("image_model"),
                     "person_reference_used": item.get("person_reference_used", False),
                     "person_reference_count": item.get("person_reference_count", 0),
                     "extra_prompt_used": item.get("extra_prompt_used", False),
@@ -1679,6 +1793,9 @@ def run_create_job(job_id, script_text, title, client_slug=DEFAULT_CLIENT, perso
             "download_url": primary_result["download_url"],
             "filename": primary_result["filename"],
             "used_ai": meta["used_ai"],
+            "image_provider": meta.get("image_provider"),
+            "vision_provider": meta.get("vision_provider"),
+            "image_model": meta.get("image_model"),
             "person_reference_used": meta.get("person_reference_used", False),
             "person_reference_count": meta.get("person_reference_count", 0),
             "extra_prompt_used": meta.get("extra_prompt_used", False),
@@ -1824,15 +1941,20 @@ class ThumbnailHandler(BaseHTTPRequestHandler):
             return self.send_json(
                 {
                     "openai_configured": bool(openai_key()),
-                    "model": openai_model(),
-                    "image_model": openai_image_model(),
-                    "person_image_model": openai_person_image_model(),
-                    "person_image_quality": openai_person_image_quality(),
-                    "person_image_size": image_size_for_model(openai_person_image_model()),
-                    "person_review_model": openai_person_review_model(),
+                    "image_provider": image_provider(),
+                    "vision_provider": vision_provider(),
+                    "image_provider_configured": image_provider_configured(),
+                    "vision_provider_configured": vision_provider_configured(),
+                    "generation_configured": image_provider_configured() and vision_provider_configured(),
+                    "model": active_vision_model(),
+                    "image_model": active_image_model(),
+                    "person_image_model": active_image_model(True),
+                    "person_image_quality": active_image_quality(True),
+                    "person_image_size": active_image_size(True),
+                    "person_review_model": active_vision_model(review=True),
                     "reference_strategy": REFERENCE_STRATEGY,
                     "reference_preservation": REFERENCE_PRESERVATION,
-                    "reference_workflow_version": 7,
+                    "reference_workflow_version": 8,
                     "camera_facing_required": False,
                     "camera_facing_rule": "best_effort",
                     "reference_appearance_check_required": True,
@@ -1864,7 +1986,7 @@ class ThumbnailHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         path = self.request_path()
         if path == "/api/settings":
-            return self.send_json({"error": "API key setup is disabled. Set OPENAI_API_KEY on the server."}, 403)
+            return self.send_json({"error": "Browser API-key setup is disabled. Configure provider credentials on the server."}, 403)
 
         if path != "/api/create":
             self.send_error(404)
@@ -1889,6 +2011,7 @@ class ThumbnailHandler(BaseHTTPRequestHandler):
             if not script_text:
                 return self.send_json({"error": "Paste the script first."}, 400)
 
+            require_generation_configuration()
             ensure_dirs()
             person_reference_paths = save_person_reference_uploads(form)
             job_id = start_create_job(

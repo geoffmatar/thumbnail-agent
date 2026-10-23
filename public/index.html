@@ -171,11 +171,11 @@
             <div class="brand-meta">
               <h1 id="studioTitle">Thumbnail agent</h1>
             </div>
-            <p id="statusLine" class="sr-only" aria-live="polite">Checking setup...</p>
+            <p id="statusLine" class="sr-only" role="status" aria-live="polite">Checking setup...</p>
           </div>
           <div id="progressPanel" class="progress-panel">
             <div class="progress-head">
-              <span id="progressLabel">Ready to create.</span>
+              <span id="progressLabel">Add your title and script.</span>
               <span id="progressPercent">0%</span>
             </div>
             <div class="progress-track" aria-hidden="true">
@@ -216,7 +216,7 @@
 
           <section class="result-panel">
             <div class="create-panel">
-              <button id="createBtn" class="primary-btn" type="button">Create Thumbnail</button>
+              <button id="createBtn" class="primary-btn" type="button" disabled>Create Thumbnail</button>
             </div>
 
             <div class="preview-stage">
@@ -242,6 +242,6 @@
       </div>
     </div>
 
-    <script src="/app.js?v=20261021-camera-best-effort-1"></script>
+    <script src="/app.js?v=20261023-provider-readiness-1"></script>
   </body>
 </html>

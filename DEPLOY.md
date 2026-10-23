@@ -1,86 +1,75 @@
-# Deploying The Internal Thumbnail Agent
+# Deploying the Thumbnail Agent
 
-This app is intended to be deployed as an internal web app.
+The migration keeps the same repository, existing Render service, URL, six brand templates, fonts and one-to-four-photo upload flow.
 
-## What Teammates Get
+## Provider configuration
 
-Your team gets one URL. When they open it, they can choose an agent, enter a title and script, and optionally upload a person reference image to generate thumbnails.
-
-## Required Server Secrets
-
-Set these environment variables in your hosting provider:
-
-```bash
-OPENAI_API_KEY=sk-...
-OPENAI_MODEL=gpt-5.5
-OPENAI_IMAGE_MODEL=gpt-image-2.5-sunburst-2026-09-08
-OPENAI_IMAGE_QUALITY=medium
-OPENAI_PERSON_IMAGE_MODEL=gpt-image-2.5-sunburst-2026-09-08
-OPENAI_PERSON_IMAGE_QUALITY=high
-OPENAI_PERSON_REVIEW_MODEL=gpt-6-astra
-```
-
-Do not put `OPENAI_API_KEY` in the code or send it to teammates.
-
-All planning, image generation, and checks use the existing server key. Scenes without person references use `OPENAI_IMAGE_MODEL` (default `gpt-image-2.5-sunburst-2026-09-08`) and `OPENAI_IMAGE_QUALITY` (default `medium`). Reference-image edits use independent settings: `OPENAI_PERSON_IMAGE_MODEL` defaults to the same pinned Sunburst model and `OPENAI_PERSON_IMAGE_QUALITY` defaults to `high`. Existing general-model overrides remain supported and do not change the reference defaults. No additional API key is needed.
-
-High-quality reference edits and the dedicated appearance-review call may increase generation time and API cost. GPT Image 2-family models request a 1152×2048 scene, matching the final 9:16 composition; the downloadable branded PNG remains 1080×1920.
-
-Across every brand, camera-facing head and eye direction is a best-effort generation target. Angled or looking-away uploads are accepted. Facial feature preservation takes priority over forced reorientation.
-
-The optional gaze check can guide one automatic correction. Gaze and appearance corrections share at most two generation attempts per thumbnail, always reusing the original references when supplied. Off-camera gaze or a missing, malformed, or unavailable gaze check never blocks the job or browser display. For reference-based thumbnails, the app keeps the best appearance-passing candidate if gaze correction cannot improve it safely. The CLI `--subject-image` path also accepts off-camera gaze; its optional check does not block the supplied scene.
-
-## Person Reference Workflow
-
-Teammates can upload one separate photo per person, up to four references, including angled or looking-away photos. Uploads appear progressively, with original previews, filenames, Replace, and Remove controls. Every selected photo is sent in order to OpenAI visual planning and the Images edits request. The model uses each person's facial proportions, hair, and distinguishing features as identity guidance while the scene, body pose, expression, and clothing can follow the script. It aims for the closest natural camera-facing direction without sacrificing these features. There is no cutout pipeline or pasted-photo fallback.
-
-If the person-image model is explicitly overridden to `gpt-image-1` or `gpt-image-1.5`, reference edits use high input fidelity; 2-family models handle high input fidelity automatically. Install the packages in `requirements.txt`; no segmentation model or masking runtime is required.
-
-The included `.python-version` selects Python 3.12 for native Render deployments, matching the Docker image.
-
-The required appearance review uses `OPENAI_PERSON_REVIEW_MODEL` (default `gpt-6-astra`), independently of `OPENAI_MODEL` for visual planning and optional gaze checks. Regardless of gaze direction, it compares each original reference against the final thumbnail for face shape, eyes and brows, nose and mouth, hair, glasses, and sufficient clarity. Optional jewelry may change. All required visible-feature checks must pass for every reference; changed facial features or an unavailable or malformed appearance review can still stop creation. This reviews edit quality without identifying anyone or proving an exact identity match; it can miss changes. Exact likeness is not guaranteed by image generation, so teammates should review every face and hairstyle before use.
-
-The browser locks reference controls while that brand's job runs and requires the reported reference count, edit strategy, and checked/passed appearance status for the overall result and every option before display. Duplicate image content is rejected, while different photos with the same filename are valid.
-
-## Recommended: Render
-
-1. Put this `thumbnail-agent` folder in a private GitHub repository.
-2. Create a new Render web service from that repository.
-3. Use these settings:
+Set these values in the existing service's Environment settings:
 
 ```text
-Runtime: Python
-Build command: python3 -m pip install -r requirements.txt
-Start command: python3 thumbnail_agent.py serve --host 0.0.0.0 --port $PORT
+THUMBNAIL_IMAGE_PROVIDER=higgsfield
+THUMBNAIL_VISION_PROVIDER=gemini
+HF_API_KEY_ID=<Higgsfield API key ID>
+HF_API_KEY_SECRET=<Higgsfield API key secret>
+GEMINI_API_KEY=<Google Gemini API key>
+GEMINI_MODEL=gemini-3.5-flash-lite
+GEMINI_REVIEW_MODEL=gemini-3.8-flash
 ```
 
-4. Add the environment variables above.
-5. Deploy.
-6. Send your team the Render URL.
+Store the three credential values as server secrets. Keep them out of chat, browser code and source control. Local development reads the ignored `.env`; changing it does not update Render.
 
-This folder also includes `render.yaml` if you prefer Render Blueprint setup.
+Higgsfield uses production `marketing-studio/image/sunburst` for scenes and reference edits: high quality, 2K, 9:16, `enhance_prompt=false`. All references are uploaded in order with signed upload URLs. Finished images are downloaded immediately and rendered as 1080×1920 branded PNGs.
 
-## Docker Option
+Gemini handles planning, optional gaze checks and required visible-feature appearance review. The review model is independent of the planning model. With both new selectors set, no creation step calls OpenAI or falls back to its billing. Existing OpenAI environment values may remain for rollback.
 
-The included `Dockerfile` works on hosts that accept Docker apps:
+### Billing and account access
+
+Higgsfield's API has a separate prepaid dollar balance. Subscription/plugin credits and Unlimited allowances do not fund website API requests. Gemini uses a Google API project with its own billing and quotas. Confirm model access and available balance/quota in both accounts.
+
+References: [Higgsfield API and billing](https://higgsfield.ai/creator-hub/help-center/integrations/what-is-the-higgsfield-api), [Sunburst parameters](https://open.higgsfield.ai/models/marketing-studio/image/sunburst/api-reference), [Gemini models](https://ai.google.dev/gemini-api/docs/models).
+
+## Update the existing Render service
+
+1. Sign in to the Render account/workspace that owns `thumbnail-agent-1.onrender.com`. An empty workspace cannot update it.
+2. Open that existing web service's **Environment** page. Add the selectors, models and secrets above.
+3. Keep its repository and existing build/start commands:
+   - Build: `python3 -m pip install -r requirements.txt`
+   - Start: `python3 thumbnail_agent.py serve --host 0.0.0.0 --port $PORT`
+4. Deploy the migration commit after credentials and provider billing/access are ready.
+5. Confirm `/api/status` reports Higgsfield images, Gemini vision, both configuration flags true, workflow 8, and valid brand assets.
+6. Run one single-option brand job with a short script and individual reference photo(s). Confirm completion, appearance checks, and a downloaded 1080×1920 PNG. Visually compare every face and hairstyle before releasing the migration to all teams.
+
+`render.yaml` describes the new provider configuration for Blueprint-managed services. Committing it does not apply environment changes to a separately configured existing service. `.python-version` and the Docker image select Python 3.12.
+
+`/healthz` confirms only that the HTTP process responds. `/api/status` credential flags indicate nonempty configuration; they do not verify authentication, balance, successful generation or image quality. Missing configuration is detected before a request can spend on either provider.
+
+## Reference and retry behavior
+
+Original-reference ordering, required appearance checks and best-effort camera direction remain. Every visible-feature category must pass for every reference. Failed, blocked, unavailable or malformed appearance reviews cannot publish unchecked output. Head angle alone never rejects a thumbnail.
+
+Appearance and gaze corrections share at most two intentional generation attempts per thumbnail, always from original photos. Zoomex and Siyata create two options, so a run can generate up to four images. A failed optional correction retains the previously selected appearance-passing result.
+
+The Higgsfield client never automatically repeats a generation submission after an ambiguous receipt, timeout or network failure. Each submission uses an idempotency key; only safe status/download reads are retried. A timed-out request may still finish at Higgsfield: inspect provider request history before starting another run.
+
+Automatic review evaluates visible editing quality, without identifying anyone or guaranteeing exact likeness. Inspect finished faces and hair before use.
+
+## Rollback
+
+Without selectors, existing installations retain the OpenAI workflow. To roll back explicitly, set both provider selectors to `openai`, supply a valid funded `OPENAI_API_KEY`, and redeploy. Existing `OPENAI_*` overrides remain supported. An invalid key or exhausted OpenAI organization budget must be resolved before rollback can generate.
+
+Provider errors never change billing providers automatically.
+
+## Offline checks
 
 ```bash
-docker build -t zoomex-thumbnail-agent .
-docker run -p 8787:8787 \
-  -e OPENAI_API_KEY="sk-..." \
-  -e PORT=8787 \
-  zoomex-thumbnail-agent
+python3 -B -m unittest discover -s tests -v
+node tests/test_frontend_readiness.js
 ```
 
-Then open:
+These use synthetic images and mocked responses, spend no credits, and do not prove live access or real-person likeness.
 
-```text
-http://localhost:8787
-```
+## Hosting notes
 
-## Important Security Notes
+Generated PNGs stay on the host filesystem and may disappear after restart/redeploy; download them promptly. Browser API-key setup stays disabled. Anyone with access to the app URL can request generation, so monitor both provider accounts.
 
-- Use a private repository.
-- Do not enable browser API-key setup on the hosted app.
-- Monitor OpenAI usage, because anyone with the link can spend API credits.
-- Generated PNGs should be downloaded after creation; simple hosts may not keep files forever after restarts.
+Docker deployments use the included image and the same environment variables; pass secrets through the host's secret store or an ignored environment file.

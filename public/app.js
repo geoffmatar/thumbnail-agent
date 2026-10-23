@@ -96,6 +96,8 @@ const clientStates = Object.fromEntries(
       progress: null,
       progressStartedAt: 0,
       running: false,
+      setupReady: false,
+      statusRequestVersion: 0,
       result: null,
       resultVersion: 0,
       statusMessage: "Checking setup...",
@@ -175,6 +177,7 @@ function renderStatus(clientSlug = currentClient) {
   const state = getClientState(clientSlug);
   statusLine.textContent = state.statusMessage;
   statusLine.classList.toggle("error", state.statusIsError);
+  statusLine.classList.toggle("sr-only", !state.statusIsError);
 }
 
 function setStatus(message, isError = false, clientSlug = currentClient) {
@@ -411,7 +414,7 @@ function renderProgress(clientSlug = currentClient) {
   const progressState = state.progress || {
     status: "idle",
     progress: 0,
-    message: "Ready to create.",
+    message: "Add your title and script.",
     elapsed_seconds: 0,
   };
   const elapsed = progressState.elapsed_seconds ?? Math.round((Date.now() - state.progressStartedAt) / 1000);
@@ -479,7 +482,7 @@ function stopProgress() {
 
 function updateCreateButtonState() {
   const state = getClientState();
-  createBtn.disabled = Boolean(state?.running);
+  createBtn.disabled = Boolean(state?.running) || state?.setupReady !== true;
   updateReferenceControlState();
 }
 
@@ -558,16 +561,46 @@ function previewThumbnailWithKeyboard(event) {
 }
 
 async function loadStatus(clientSlug = currentClient) {
+  const state = getClientState(clientSlug);
+  if (!state) return;
+  const requestVersion = ++state.statusRequestVersion;
+  state.setupReady = false;
+  if (!state.running) setStatus("Checking setup...", false, clientSlug);
+  updateCreateButtonState();
+
   try {
     const status = await readJson(`/api/status?client=${encodeURIComponent(clientSlug)}`);
-    const designText = status.design_ready ? status.client.design_label : "design missing";
-    const fontText = status.font_ready ? status.client.font_label : "font missing";
-    setStatus(`${designText} | ${fontText} | ready to create`, false, clientSlug);
-    if (!status.openai_configured) {
-      setStatus("Server OpenAI key missing. Ask the app admin to set OPENAI_API_KEY.", true, clientSlug);
+    if (state.statusRequestVersion !== requestVersion) return;
+    const providerNames = { higgsfield: "Higgsfield", gemini: "Gemini", openai: "OpenAI" };
+    const imageName = providerNames[status.image_provider] || "Selected provider";
+    const visionName = providerNames[status.vision_provider] || "Selected provider";
+    const missingProviders = [];
+    if (status.image_provider_configured !== true) missingProviders.push(`${imageName} image generation`);
+    if (status.vision_provider_configured !== true) missingProviders.push(`${visionName} vision review`);
+
+    if (missingProviders.length) {
+      setStatus(`Server setup incomplete: ${missingProviders.join(" and ")} not configured. Ask the app admin to complete provider setup.`, true, clientSlug);
+    } else if (status.generation_configured !== true) {
+      setStatus("Server generation setup is incomplete. Ask the app admin to check the image and vision provider configuration.", true, clientSlug);
+    } else if (status.design_ready !== true || status.font_ready !== true) {
+      const missingAssets = [];
+      if (status.design_ready !== true) missingAssets.push("brand design");
+      if (status.font_ready !== true) missingAssets.push("title font");
+      setStatus(`Server setup incomplete: ${missingAssets.join(" and ")} missing. Ask the app admin to restore the brand assets.`, true, clientSlug);
+    } else {
+      state.setupReady = true;
+      if (!state.running) {
+        const designText = status.client?.design_label || "brand design ready";
+        const fontText = status.client?.font_label || "title font ready";
+        setStatus(`${designText} | ${fontText} | ${imageName} images + ${visionName} review | ready to create`, false, clientSlug);
+      }
     }
   } catch (error) {
-    setStatus(error.message, true, clientSlug);
+    if (state.statusRequestVersion === requestVersion) {
+      setStatus(`Could not check server setup. ${error.message}`, true, clientSlug);
+    }
+  } finally {
+    updateCreateButtonState();
   }
 }
 
@@ -588,6 +621,10 @@ async function createThumbnail() {
   const jobClient = currentClient;
   const state = getClientState(jobClient);
   if (state.running) return;
+  if (state.setupReady !== true) {
+    if (!state.statusIsError) setStatus("Checking server setup. Please wait before creating a thumbnail.", false, jobClient);
+    return;
+  }
   const jobReferenceFiles = state.personReferences.map((reference) => reference.file);
   const title = titleInput.value.trim();
   if (!title) {

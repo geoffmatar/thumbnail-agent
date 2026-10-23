@@ -6,17 +6,17 @@ services:
     buildCommand: python3 -m pip install -r requirements.txt
     startCommand: python3 thumbnail_agent.py serve --host 0.0.0.0 --port $PORT
     envVars:
-      - key: OPENAI_API_KEY
+      - key: HF_API_KEY_ID
         sync: false
-      - key: OPENAI_MODEL
-        value: gpt-5.5
-      - key: OPENAI_IMAGE_MODEL
-        value: gpt-image-2.5-sunburst-2026-09-08
-      - key: OPENAI_IMAGE_QUALITY
-        value: medium
-      - key: OPENAI_PERSON_IMAGE_MODEL
-        value: gpt-image-2.5-sunburst-2026-09-08
-      - key: OPENAI_PERSON_IMAGE_QUALITY
-        value: high
-      - key: OPENAI_PERSON_REVIEW_MODEL
-        value: gpt-6-astra
+      - key: HF_API_KEY_SECRET
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: THUMBNAIL_IMAGE_PROVIDER
+        value: higgsfield
+      - key: THUMBNAIL_VISION_PROVIDER
+        value: gemini
+      - key: GEMINI_MODEL
+        value: gemini-3.5-flash-lite
+      - key: GEMINI_REVIEW_MODEL
+        value: gemini-3.8-flash

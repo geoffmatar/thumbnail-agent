@@ -31,15 +31,15 @@ An optional gaze check can guide one automatic correction, with at most two gene
 
 Upload one photo per person, up to four people. The studio starts with **Upload image 1** and reveals the next upload after each selection. Each reference shows its original thumbnail and filename, with Replace and Remove controls; click the thumbnail to enlarge it. References are remembered separately for each brand while the page stays open and are locked during that brand's generation.
 
-All selected photos are supplied together, in order, to visual planning and the OpenAI Images edits request. Each person's facial proportions, hair, and distinguishing features guide their identity in the generated scene. The script and extra prompt can change the setting, body pose, expression, and clothing. Camera-facing head and eye direction is a best-effort target, with facial features taking priority over forced reorientation. There is no local cutout, pasted-photo composition, or intact-photo fallback.
+All selected photos are supplied together, in order, to visual planning and the selected image provider's edit request. Each person's facial proportions, hair, and distinguishing features guide their appearance in the generated scene. The script and extra prompt can change the setting, body pose, expression, and clothing. Camera-facing head and eye direction is a best-effort target, with facial features taking priority over forced reorientation. There is no local cutout, pasted-photo composition, or intact-photo fallback.
 
-An appearance review compares each reference photo with the final rendered thumbnail for visible face shape, eyes and brows, nose and mouth, hair, glasses, and sufficient clarity, regardless of gaze direction. It uses `OPENAI_PERSON_REVIEW_MODEL`, defaulting to `gpt-6-astra`, independently of the `OPENAI_MODEL` used for visual planning and optional gaze checks. Optional jewelry may change. Changed facial features or an unavailable or malformed appearance review can still stop creation. This is a review of visible edit quality, without identifying anyone or proving an exact identity match. The check can miss changes, and exact likeness is not guaranteed by image generation; review all faces and hair before using the thumbnail.
+An appearance review compares each reference photo with the final rendered thumbnail for visible face shape, eyes and brows, nose and mouth, hair, glasses, and sufficient clarity, regardless of gaze direction. With Gemini selected, `GEMINI_REVIEW_MODEL` defaults to `gemini-3.8-flash`, independently of `GEMINI_MODEL` (`gemini-3.5-flash-lite`) for planning and optional gaze checks. Optional jewelry may change. Changed facial features or an unavailable or malformed appearance review can still stop creation. This is a review of visible edit quality, without identifying anyone or proving an exact identity match. The check can miss changes, and exact likeness is not guaranteed by image generation; review all faces and hair before using the thumbnail.
 
 The studio checks the server's reported reference count, edit strategy, and successful appearance review for every option before showing a photo-based result. Uploading identical image content more than once is rejected; different photos may share a filename.
 
-Scenes without person references use `OPENAI_IMAGE_MODEL`, which defaults to the pinned `gpt-image-2.5-sunburst-2026-09-08` model, and `OPENAI_IMAGE_QUALITY`, which defaults to `medium`. Person-reference edits use the independent `OPENAI_PERSON_IMAGE_MODEL` setting, defaulting to the same pinned model, and `OPENAI_PERSON_IMAGE_QUALITY`, defaulting to `high`. An existing override of the general image model does not change the person-reference defaults. All requests use the existing server OpenAI key.
+With Higgsfield selected, both new scenes and reference edits use Marketing Studio Image 2.5 Sunburst (`marketing-studio/image/sunburst`) in direct mode: high quality, 2K, 9:16, and `enhance_prompt=false`. The app supplies all original reference photos in their numbered order. Higgsfield uploads remain outside the app's public asset routes. Completed images are downloaded immediately and composited to 1080×1920 branded PNGs. Submission failures never trigger an OpenAI fallback. An ambiguous or timed-out submission is not automatically resubmitted; inspect it in the provider's dashboard before starting another run.
 
-GPT Image 2-family models generate a 1152×2048 scene in the final thumbnail's 9:16 aspect ratio; the branded output remains 1080×1920. High-quality reference edits and the dedicated appearance-review call may increase generation time and API cost. Legacy `gpt-image-1` and `gpt-image-1.5` overrides use high input fidelity for reference edits; 2-family models handle it automatically.
+Higgsfield's API balance is separate from its website subscription and plugin credits. Gemini planning/review use Google API billing and limits. The Higgsfield API does not provide the text/vision review model, so the two providers are required for this configuration. See [Higgsfield API billing](https://higgsfield.ai/creator-hub/help-center/integrations/what-is-the-higgsfield-api), [Sunburst API parameters](https://open.higgsfield.ai/models/marketing-studio/image/sunburst/api-reference), and [Gemini model documentation](https://ai.google.dev/gemini-api/docs/models).
 
 ## Subject Placement
 
@@ -49,16 +49,16 @@ Leverage Edu uses its own image opening: important subject details belong at x=4
 
 ## Setup
 
-Put your OpenAI API key in `.env` for local use:
+Copy `.env.example` to the ignored `.env` and configure these settings locally or in the host's server environment. Keep real credentials out of chat, source control, browser code, and screenshots:
 
 ```bash
-OPENAI_API_KEY="your_api_key_here"
-OPENAI_MODEL="gpt-5.5"
-OPENAI_IMAGE_MODEL="gpt-image-2.5-sunburst-2026-09-08"
-OPENAI_IMAGE_QUALITY="medium"
-OPENAI_PERSON_IMAGE_MODEL="gpt-image-2.5-sunburst-2026-09-08"
-OPENAI_PERSON_IMAGE_QUALITY="high"
-OPENAI_PERSON_REVIEW_MODEL="gpt-6-astra"
+THUMBNAIL_IMAGE_PROVIDER=higgsfield
+THUMBNAIL_VISION_PROVIDER=gemini
+HF_API_KEY_ID=<server-only-key-id>
+HF_API_KEY_SECRET=<server-only-key-secret>
+GEMINI_API_KEY=<server-only-google-api-key>
+GEMINI_MODEL=gemini-3.5-flash-lite
+GEMINI_REVIEW_MODEL=gemini-3.8-flash
 ```
 
 Install the dependencies and start the app:
@@ -76,17 +76,7 @@ http://127.0.0.1:8787
 
 ## Internal Company Link
 
-For internal company use, host this folder as a private web app and set these server environment variables:
-
-```bash
-OPENAI_API_KEY="your_server_key"
-OPENAI_MODEL="gpt-5.5"
-OPENAI_IMAGE_MODEL="gpt-image-2.5-sunburst-2026-09-08"
-OPENAI_IMAGE_QUALITY="medium"
-OPENAI_PERSON_IMAGE_MODEL="gpt-image-2.5-sunburst-2026-09-08"
-OPENAI_PERSON_IMAGE_QUALITY="high"
-OPENAI_PERSON_REVIEW_MODEL="gpt-6-astra"
-```
+For internal company use, host this folder as a private web app and set the same server environment variables as above. For the existing Render service, update its Environment settings; a local `.env` or a commit to `render.yaml` does not update an independently configured live service.
 
 The hosted link opens directly for teammates. Anyone with the hosted link can use it.
 
@@ -97,6 +87,14 @@ python3 thumbnail_agent.py serve --host 0.0.0.0 --port $PORT
 ```
 
 Generated thumbnails are saved on the server filesystem. On many simple hosts, those files may disappear after a redeploy or restart, so download the PNG after creating it.
+
+`/api/status` reports selected providers and whether each has nonempty credentials. This is configuration presence, not a live authentication, balance, or generation test. Both providers and the selected brand's assets must be configured before the browser enables Create. Missing Gemini credentials are detected before an image request can spend Higgsfield funds.
+
+### Existing installations and rollback
+
+When provider selectors are absent, existing installations retain the OpenAI workflow. Selecting `THUMBNAIL_IMAGE_PROVIDER=higgsfield` and `THUMBNAIL_VISION_PROVIDER=gemini` removes OpenAI API calls from the whole creation path, even when an old `OPENAI_API_KEY` remains in the host environment.
+
+To roll back, set both selectors to `openai` and provide a valid funded `OPENAI_API_KEY`. Legacy options remain supported: `OPENAI_MODEL=gpt-5.5`, `OPENAI_IMAGE_MODEL=gpt-image-2.5-sunburst-2026-09-08`, `OPENAI_IMAGE_QUALITY=medium`, independent `OPENAI_PERSON_IMAGE_MODEL=gpt-image-2.5-sunburst-2026-09-08`, `OPENAI_PERSON_IMAGE_QUALITY=high`, and `OPENAI_PERSON_REVIEW_MODEL=gpt-6-astra`. GPT Image 2-family models use 1152×2048; explicit `gpt-image-1`/`gpt-image-1.5` reference overrides use high input fidelity. Rollback cannot bypass an exhausted OpenAI organization budget or an invalid key.
 
 ## Title Line Breaks
 
